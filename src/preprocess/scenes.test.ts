@@ -2,7 +2,8 @@
  * Unit suite for scene detection. Pure parts only — no ffmpeg.
  */
 import { describe, it, expect } from "vitest";
-import { parseSceneCuts, buildWindows, applyBudget } from "./scenes.js";
+import { parseSceneCuts, buildWindows, applyBudget, detectScenes } from "./scenes.js";
+import type { ExecFn } from "./frameUnderstand.js";
 
 describe("parseSceneCuts", () => {
   it("extracts sorted, de-duped pts_time values from showinfo stderr", () => {
@@ -69,5 +70,25 @@ describe("applyBudget", () => {
       { t0: 10, t1: 15 },
       { t0: 15, t1: 20 },
     ]);
+  });
+});
+
+describe("detectScenes", () => {
+  const showinfo = "[Parsed_showinfo_1 @ 0x1] n:0 pts_time:5.0 pos:1";
+
+  it("runs ffmpeg, parses cuts, and builds budgeted windows", async () => {
+    const exec: ExecFn = async () => ({ stdout: "", stderr: showinfo });
+    const windows = await detectScenes(exec, "clip.mp4", 12, {
+      threshold: 0.4, minSceneS: 2, maxSceneS: 15, budget: 60,
+    });
+    expect(windows).toEqual([{ t0: 0, t1: 5 }, { t0: 5, t1: 12 }]);
+  });
+
+  it("falls back to a single whole-clip window when ffmpeg throws", async () => {
+    const exec: ExecFn = async () => { throw new Error("ffmpeg missing"); };
+    const windows = await detectScenes(exec, "clip.mp4", 9, {
+      threshold: 0.4, minSceneS: 2, maxSceneS: 15, budget: 60,
+    });
+    expect(windows).toEqual([{ t0: 0, t1: 9 }]);
   });
 });

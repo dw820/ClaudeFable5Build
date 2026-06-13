@@ -103,3 +103,53 @@ export function applyBudget(
   }
   return { windows: coarse, coarsened: true };
 }
+
+export interface DetectOptions {
+  threshold: number;
+  minSceneS: number;
+  maxSceneS: number;
+  budget: number;
+}
+
+/** Default detect options sourced from the env-overridable constants. */
+export const DEFAULT_DETECT_OPTIONS: DetectOptions = {
+  threshold: SCENE_THRESHOLD,
+  minSceneS: MIN_SCENE_S,
+  maxSceneS: SCENE_MAX_S,
+  budget: SCENE_BUDGET,
+};
+
+/**
+ * Detect scene windows for one clip. The only I/O: one ffmpeg pass whose
+ * showinfo lines go to stderr (the `null` muxer discards the video). Any ffmpeg
+ * failure degrades to a single whole-clip window — detection is best-effort and
+ * never fails the clip.
+ */
+export async function detectScenes(
+  exec: ExecFn,
+  clipPath: string,
+  durationS: number,
+  opts: DetectOptions = DEFAULT_DETECT_OPTIONS,
+): Promise<SceneWindow[]> {
+  const whole: SceneWindow[] = durationS > 0 ? [{ t0: 0, t1: durationS }] : [];
+  try {
+    const { stderr } = await exec("ffmpeg", [
+      "-i", clipPath,
+      "-filter:v", `select='gt(scene,${opts.threshold})',showinfo`,
+      "-f", "null", "-",
+    ]);
+    const cuts = parseSceneCuts(stderr);
+    const windows = buildWindows(cuts, durationS, opts);
+    if (windows.length === 0) return whole;
+    const { windows: bounded, coarsened } = applyBudget(windows, durationS, opts.budget);
+    if (coarsened) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[scenes] ${clipPath}: ${windows.length} scenes > budget ${opts.budget} — coarsened to ${bounded.length}`,
+      );
+    }
+    return bounded;
+  } catch {
+    return whole;
+  }
+}
