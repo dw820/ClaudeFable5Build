@@ -1,0 +1,122 @@
+{
+  "projectId": "beach-trip",
+  "clips": [
+    {
+      "id": "c01",
+      "src": "media/clips/wipeout.mp4",
+      "start": 0,
+      "end": 12,
+      "duration": 12,
+      "resolution": [1080, 1920],
+      "transcript": [
+        { "word": "watch", "t0": 0.2, "t1": 0.5 },
+        { "word": "this", "t0": 0.5, "t1": 0.8 }
+      ],
+      "caption": "a surfer paddles hard and wipes out on a breaking wave",
+      "tags": ["action", "hook", "ocean", "wipeout"]
+    },
+    {
+      "id": "c02",
+      "src": "media/clips/sunset.mp4",
+      "start": 0,
+      "end": 18,
+      "duration": 18,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "golden-hour sun sinking over calm water, warm orange sky",
+      "tags": ["b-roll", "golden-hour", "calm"]
+    },
+    {
+      "id": "c03",
+      "src": "media/clips/paddle.mp4",
+      "start": 0,
+      "end": 10,
+      "duration": 10,
+      "resolution": [1080, 1920],
+      "transcript": [{ "word": "go", "t0": 1.0, "t1": 1.3 }],
+      "caption": "wide shot of friends paddling out through small surf",
+      "tags": ["group", "ocean"]
+    },
+    {
+      "id": "c04",
+      "src": "media/clips/splash.mp4",
+      "start": 0,
+      "end": 6,
+      "duration": 6,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "slow-motion splash of water against the camera lens",
+      "tags": ["slowmo", "texture", "transition"]
+    },
+    {
+      "id": "c05",
+      "src": "media/clips/laugh.mp4",
+      "start": 0,
+      "end": 8,
+      "duration": 8,
+      "resolution": [1080, 1920],
+      "transcript": [
+        { "word": "did", "t0": 0.3, "t1": 0.5 },
+        { "word": "you", "t0": 0.5, "t1": 0.7 },
+        { "word": "see", "t0": 0.7, "t1": 1.0 }
+      ],
+      "caption": "two friends laughing on the beach, candid reaction",
+      "tags": ["reaction", "people", "candid"]
+    },
+    {
+      "id": "c06",
+      "src": "media/clips/drone.mp4",
+      "start": 0,
+      "end": 20,
+      "duration": 20,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "drone pull-back revealing the whole beach and reef",
+      "tags": ["b-roll", "drone", "establishing"]
+    },
+    {
+      "id": "c07",
+      "src": "media/clips/board.mp4",
+      "start": 0,
+      "end": 7,
+      "duration": 7,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "close-up of waxing a surfboard, hands in frame",
+      "tags": ["detail", "prep"]
+    },
+    {
+      "id": "c08",
+      "src": "media/clips/run.mp4",
+      "start": 0,
+      "end": 9,
+      "duration": 9,
+      "resolution": [1080, 1920],
+      "transcript": [{ "word": "come", "t0": 0.4, "t1": 0.7 }],
+      "caption": "group running toward the water carrying boards",
+      "tags": ["action", "group", "energy"]
+    },
+    {
+      "id": "c09",
+      "src": "media/clips/van.mp4",
+      "start": 0,
+      "end": 11,
+      "duration": 11,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "sliding open a camper van door to reveal the beach",
+      "tags": ["opener", "lifestyle"]
+    },
+    {
+      "id": "c10",
+      "src": "media/clips/campfire.mp4",
+      "start": 0,
+      "end": 14,
+      "duration": 14,
+      "resolution": [1080, 1920],
+      "transcript": [],
+      "caption": "beach campfire at dusk, sparks rising, friends silhouetted",
+      "tags": ["b-roll", "dusk", "closer"]
+    }
+  ]
+}
