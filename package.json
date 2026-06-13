@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Autonomous AI video editor — self-correction loop controller (task #1)",
+  "description": "Autonomous AI video editor — autonomous Claude Agent SDK session on Daytona, fenced by deterministic caps",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",

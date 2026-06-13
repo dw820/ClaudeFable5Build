@@ -143,7 +143,7 @@
 
   <div class="micro">AutoCut · End-to-End Architecture</div>
   <h1>Request flow &amp; where the dynamic workflow lives</h1>
-  <p class="sub">One generation, top to bottom. The browser kicks a job, the Agent SDK lands it inside Daytona, and a <b>deterministic JS dynamic-workflow controller</b> runs the self-correction loop — writing events to Supabase the whole way so the UI animates live.</p>
+  <p class="sub">One generation, top to bottom. The browser kicks a job, the Agent SDK lands it inside Daytona, and an autonomous <b>Claude Agent SDK session</b> runs the self-correction loop; deterministic caps fence it — writing events to Supabase the whole way so the UI animates live.</p>
 
   <div class="legend">
     <span class="chip"><span class="dot" style="background:var(--ink)"></span>Browser / Next.js</span>
@@ -213,8 +213,8 @@
 
     <!-- THE LOOP -->
     <div class="loop">
-      <span class="loop-badge">loop/ — dynamic workflow controller (deterministic JS)</span>
-      <p class="loop-sub" style="margin-top:10px">A JS <code>while</code> loop owns termination — <b>not</b> the agent free-running on <code>/goal</code>. Caps: <b>iters ≤ 4</b> · token budget · wallclock. Tracks <b>best_render</b> in a plain variable.</p>
+      <span class="loop-badge">agent/ — autonomous Agent SDK session (Claude drives; caps fence)</span>
+      <p class="loop-sub" style="margin-top:10px">Claude owns iteration; the <b>harness</b> owns termination via maxTurns + maxBudgetUsd + wall-clock <code>close()</code> — never a free-running <code>/goal</code> with no cap. Caps: <b>iters ≤ 4</b> · token budget · wallclock. Tracks <b>best_render</b> in a plain variable.</p>
 
       <div class="steps">
         <div class="step agent">
@@ -249,7 +249,7 @@
       </div>
 
       <div class="bus">
-        <span>After every step the controller</span>
+        <span>the harness watches the SDK stream and</span>
         <span class="pill">writes events / grades rows →</span>
         <span>Supabase</span>
       </div>
@@ -284,7 +284,7 @@
         <h2>The data bus</h2>
       </div>
       <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Postgres</b> — projects, edls, renders, grades</span></div>
-      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Realtime</b> — controller writes → UI subscribes → scorecard climbs live</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Realtime</b> — harness stream-watch writes → UI subscribes → scorecard climbs live</span></div>
       <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Storage</b> — raw clips + rendered video</span></div>
       <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>pgvector / Auth</b> — off demo path · single pre-authed user</span></div>
       <p class="note">This is the seam between Daytona and the browser: the loop never talks to the UI directly — it just writes rows, the UI just reads them. Reconnection-safe &amp; replayable.</p>
@@ -307,12 +307,12 @@
     <div class="micro" style="margin-bottom:12px">How to read the three pieces you asked about</div>
     <div class="twocol">
       <div>
-        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Dynamic workflow</b> = the <code>loop/</code> controller. Deterministic JS that wraps model-driven steps. Owns caps, best-so-far, and the build→render→verify→feedback cycle. The same primitive (fan-out) also powers preprocess + the grading panel.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Autonomous session</b> = <code>agent/</code>. Claude owns the build→render→grade→fix cycle; the harness owns caps + best-so-far. The same primitive (fan-out) also powers preprocess + the grading panel.</span></div>
         <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Daytona</b> = where that controller + Opus 4.8 + ffmpeg + Remotion + file-memory all live on one filesystem. The agent's persistent home.</span></div>
       </div>
       <div>
         <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Supabase</b> = the decoupling bus. Controller writes events/grades; the browser subscribes via Realtime. Neither side blocks the other — that's what makes the live scorecard reconnection-safe.</span></div>
-        <div class="keyrow"><span class="kdot" style="background:var(--ink)"></span><span><b>The split that matters:</b> blue steps = <code>agent()</code> (judgment); ink steps = plain JS (render, validate, caps). Termination is trustworthy <i>because</i> the loop logic is code, not a vibe.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--ink)"></span><span><b>The split that matters:</b> blue steps = <code>agent()</code> (judgment); ink steps = plain JS (render, validate, caps). Termination is trustworthy <i>because</i> the caps are code (maxTurns/maxBudgetUsd/wall-clock), even though the agent drives.</span></div>
       </div>
     </div>
   </div>
