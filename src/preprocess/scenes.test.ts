@@ -33,12 +33,26 @@ describe("buildWindows", () => {
     ]);
   });
 
-  it("merges windows shorter than minSceneS into the previous one", () => {
+  it("folds a short FIRST window forward into the next", () => {
     const w = buildWindows([1, 4], 10, opts);
     expect(w).toEqual([
       { t0: 0, t1: 4 },
       { t0: 4, t1: 10 },
     ]);
+  });
+
+  it("folds a short non-first window back into its predecessor", () => {
+    // cut at 5 and 6 → middle window 5–6 is 1s (< 2s) and folds into 0–5
+    const w = buildWindows([5, 6], 10, opts);
+    expect(w).toEqual([
+      { t0: 0, t1: 6 },
+      { t0: 6, t1: 10 },
+    ]);
+  });
+
+  it("returns [] for a non-positive duration", () => {
+    expect(buildWindows([], 0, opts)).toEqual([]);
+    expect(buildWindows([], -1, opts)).toEqual([]);
   });
 
   it("subdivides windows longer than maxSceneS into equal sub-windows", () => {

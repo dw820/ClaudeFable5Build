@@ -21,6 +21,7 @@ export interface SceneWindow {
 /** PURE: extract sorted, de-duped `pts_time` cut timestamps from ffmpeg showinfo stderr. */
 export function parseSceneCuts(stderr: string): number[] {
   const times = new Set<number>();
+  // Decimal-only match — ffmpeg showinfo always emits plain decimal pts_time.
   const re = /pts_time:([0-9]+(?:\.[0-9]+)?)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(stderr)) !== null) {
@@ -54,10 +55,10 @@ export function buildWindows(cuts: number[], durationS: number, opts: WindowOpti
   for (const w of raw) {
     const prev = merged[merged.length - 1];
     if (w.t1 - w.t0 < opts.minSceneS && prev) {
-      prev.t1 = w.t1; // fold into previous
-    } else if (w.t1 - w.t0 < opts.minSceneS && merged.length === 0) {
-      merged.push({ ...w }); // first window short: keep, next short one folds in
+      prev.t1 = w.t1; // short window folds into its predecessor
     } else {
+      // First window, or a long-enough window: keep it. A short FIRST window is
+      // handled by the post-loop fold-forward below.
       merged.push({ ...w });
     }
   }
