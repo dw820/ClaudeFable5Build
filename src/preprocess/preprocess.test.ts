@@ -18,8 +18,10 @@ import {
   vlmInput,
   VLM_PROMPT,
   understandFrames,
+  understandScenes,
   type FrameSampler,
 } from "./frameUnderstand.js";
+import type { ExecFn } from "./frameUnderstand.js";
 import { parseEmbedding, embedInput, embedText } from "./embed.js";
 import {
   buildClip,
@@ -473,5 +475,42 @@ describe("uploadLibraryAssets", () => {
       "proj/clips.json",
     ]);
     expect(uploaded.clips[0]!.src).toBe("storage://proj/clips/wipeout.mp4");
+  });
+});
+
+/* --------------------------- understandScenes --------------------------- */
+
+describe("understandScenes", () => {
+  // Minimal valid JPEG byte stream (SOI…EOI) so splitJpegs finds one frame.
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("binary");
+  const fakeExec: ExecFn = async () => ({ stdout: jpeg, stderr: "" });
+
+  it("captions each window from its midpoint frame", async () => {
+    const runner = new FakeReplicateRunner([
+      '{"caption":"first scene","tags":["a"]}',
+      '{"caption":"second scene","tags":["b"]}',
+    ]);
+    const scenes = await understandScenes(runner, fakeExec, "clip.mp4", [
+      { t0: 0, t1: 6 },
+      { t0: 6, t1: 12 },
+    ]);
+    expect(scenes).toEqual([
+      { t0: 0, t1: 6, caption: "first scene", tags: ["a"] },
+      { t0: 6, t1: 12, caption: "second scene", tags: ["b"] },
+    ]);
+    expect(runner.seenCalls).toHaveLength(2);
+  });
+
+  it("degrades a failing scene to an empty caption without dropping others", async () => {
+    const runner = new FakeReplicateRunner((_id, _input, call) => {
+      if (call === 0) throw new Error("VLM 500");
+      return '{"caption":"ok","tags":[]}';
+    });
+    const scenes = await understandScenes(runner, fakeExec, "clip.mp4", [
+      { t0: 0, t1: 6 },
+      { t0: 6, t1: 12 },
+    ]);
+    expect(scenes[0]).toEqual({ t0: 0, t1: 6, caption: "", tags: [] });
+    expect(scenes[1]).toEqual({ t0: 6, t1: 12, caption: "ok", tags: [] });
   });
 });

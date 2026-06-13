@@ -14,6 +14,7 @@
  */
 import type { ReplicateRunner } from "./replicateClient.js";
 import { VLM_MODEL } from "./models.js";
+import type { Scene } from "../loop/types.js";
 
 export interface FrameUnderstanding {
   caption: string;
@@ -173,4 +174,54 @@ export async function understandFrames(
     input: vlmInput(representative),
   });
   return parseVlmResponse(response);
+}
+
+/**
+ * Extract a single JPEG frame at a precise timestamp as a base64 data URI.
+ * `-ss` before `-i` is a fast keyframe-accurate seek; `-frames:v 1` takes one
+ * frame. Reuses the same MJPEG-split path as the sampler.
+ */
+export async function sampleFrameAt(exec: ExecFn, clipPath: string, atS: number): Promise<string | null> {
+  const { stdout } = await exec("ffmpeg", [
+    "-ss", String(atS),
+    "-i", clipPath,
+    "-frames:v", "1",
+    "-f", "image2pipe",
+    "-vcodec", "mjpeg",
+    "pipe:1",
+  ]);
+  const buf = Buffer.from(stdout, "binary");
+  const [frame] = splitJpegs(buf);
+  return frame ? `data:image/jpeg;base64,${frame.toString("base64")}` : null;
+}
+
+/**
+ * Caption each scene window from its midpoint frame. Sequential so test runners
+ * with call-indexed fakes are deterministic; the per-clip fan-out in cli.ts
+ * already runs clips in parallel. A failed frame/VLM call degrades that one
+ * scene to an empty caption rather than failing the whole clip.
+ */
+export async function understandScenes(
+  runner: ReplicateRunner,
+  exec: ExecFn,
+  clipPath: string,
+  windows: { t0: number; t1: number }[],
+  opts: { model?: `${string}/${string}` | `${string}/${string}:${string}` } = {},
+): Promise<Scene[]> {
+  const scenes: Scene[] = [];
+  for (const w of windows) {
+    try {
+      const frame = await sampleFrameAt(exec, clipPath, (w.t0 + w.t1) / 2);
+      if (!frame) {
+        scenes.push({ t0: w.t0, t1: w.t1, caption: "", tags: [] });
+        continue;
+      }
+      const response = await runner.run(opts.model ?? VLM_MODEL, { input: vlmInput(frame) });
+      const { caption, tags } = parseVlmResponse(response);
+      scenes.push({ t0: w.t0, t1: w.t1, caption, tags });
+    } catch {
+      scenes.push({ t0: w.t0, t1: w.t1, caption: "", tags: [] });
+    }
+  }
+  return scenes;
 }
