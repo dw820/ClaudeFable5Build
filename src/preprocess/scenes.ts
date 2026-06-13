@@ -83,3 +83,23 @@ export function buildWindows(cuts: number[], durationS: number, opts: WindowOpti
   }
   return out;
 }
+
+/**
+ * PURE: bound VLM cost without dropping coverage. If more windows than `budget`,
+ * replace them with exactly `budget` equal windows spanning `[0, durationS]` —
+ * the whole clip stays covered end-to-end, only granularity coarsens. This only
+ * triggers on degenerate input (strobe / heavy handheld).
+ */
+export function applyBudget(
+  windows: SceneWindow[],
+  durationS: number,
+  budget: number,
+): { windows: SceneWindow[]; coarsened: boolean } {
+  if (windows.length <= budget) return { windows, coarsened: false };
+  const step = durationS / budget;
+  const coarse: SceneWindow[] = [];
+  for (let i = 0; i < budget; i++) {
+    coarse.push({ t0: i * step, t1: i === budget - 1 ? durationS : (i + 1) * step });
+  }
+  return { windows: coarse, coarsened: true };
+}

@@ -2,7 +2,7 @@
  * Unit suite for scene detection. Pure parts only — no ffmpeg.
  */
 import { describe, it, expect } from "vitest";
-import { parseSceneCuts, buildWindows } from "./scenes.js";
+import { parseSceneCuts, buildWindows, applyBudget } from "./scenes.js";
 
 describe("parseSceneCuts", () => {
   it("extracts sorted, de-duped pts_time values from showinfo stderr", () => {
@@ -50,5 +50,24 @@ describe("buildWindows", () => {
 
   it("returns a single whole-clip window for a short clip with no cuts", () => {
     expect(buildWindows([], 8, opts)).toEqual([{ t0: 0, t1: 8 }]);
+  });
+});
+
+describe("applyBudget", () => {
+  it("passes windows through unchanged when within budget", () => {
+    const w = [{ t0: 0, t1: 5 }, { t0: 5, t1: 10 }];
+    expect(applyBudget(w, 10, 8)).toEqual({ windows: w, coarsened: false });
+  });
+
+  it("coarsens to exactly `budget` equal windows covering the whole clip when over", () => {
+    const many = Array.from({ length: 20 }, (_, i) => ({ t0: i, t1: i + 1 }));
+    const { windows, coarsened } = applyBudget(many, 20, 4);
+    expect(coarsened).toBe(true);
+    expect(windows).toEqual([
+      { t0: 0, t1: 5 },
+      { t0: 5, t1: 10 },
+      { t0: 10, t1: 15 },
+      { t0: 15, t1: 20 },
+    ]);
   });
 });
