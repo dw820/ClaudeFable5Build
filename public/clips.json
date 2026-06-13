@@ -2,6 +2,145 @@
   "projectId": "fixture",
   "clips": [
     {
+      "id": "IMG_0544",
+      "src": "IMG_0544.mov",
+      "start": 0,
+      "end": 97.801667,
+      "duration": 97.801667,
+      "resolution": [
+        1280,
+        720
+      ],
+      "transcript": [
+        {
+          "word": "好,這樣就像了",
+          "t0": 0,
+          "t1": 20
+        },
+        {
+          "word": "不要拍啦",
+          "t0": 20,
+          "t1": 22
+        },
+        {
+          "word": "然後再CAM一下",
+          "t0": 22,
+          "t1": 26
+        },
+        {
+          "word": "哈哈哈哈",
+          "t0": 26,
+          "t1": 30
+        },
+        {
+          "word": "這樣起來嗎",
+          "t0": 40,
+          "t1": 42
+        },
+        {
+          "word": "這樣就比較好玩了",
+          "t0": 42,
+          "t1": 44
+        },
+        {
+          "word": "好啊",
+          "t0": 46,
+          "t1": 48
+        },
+        {
+          "word": "我黏住了",
+          "t0": 48,
+          "t1": 50
+        },
+        {
+          "word": "這個學會",
+          "t0": 54,
+          "t1": 56
+        },
+        {
+          "word": "是黏人",
+          "t0": 56,
+          "t1": 58
+        },
+        {
+          "word": "不要,你吃",
+          "t0": 58,
+          "t1": 60
+        },
+        {
+          "word": "哈哈",
+          "t0": 86,
+          "t1": 88
+        },
+        {
+          "word": "啊",
+          "t0": 88,
+          "t1": 90
+        },
+        {
+          "word": "啊,快點",
+          "t0": 90,
+          "t1": 92
+        },
+        {
+          "word": "嗯",
+          "t0": 92,
+          "t1": 94
+        },
+        {
+          "word": "好,一路",
+          "t0": 96,
+          "t1": 97.8
+        }
+      ],
+      "caption": "Two people standing on a snowy mountain, one wearing a green jacket and the other wearing a white jacket.",
+      "tags": [],
+      "scenes": [
+        {
+          "t0": 0,
+          "t1": 13.971666714285714,
+          "caption": "A man in a grey jacket is helping another man up from the snow. The man being helped is wearing a green coat and has a backpack on.",
+          "tags": []
+        },
+        {
+          "t0": 13.971666714285714,
+          "t1": 27.943333428571428,
+          "caption": "A man and woman are standing in the snow with their skis on.",
+          "tags": []
+        },
+        {
+          "t0": 27.943333428571428,
+          "t1": 41.91500014285714,
+          "caption": "A man in a green jacket is laying on the snow with his hands out.",
+          "tags": []
+        },
+        {
+          "t0": 41.91500014285714,
+          "t1": 55.886666857142856,
+          "caption": "Two people standing on a snowy mountain, one wearing a green jacket and the other wearing a white jacket.",
+          "tags": []
+        },
+        {
+          "t0": 55.886666857142856,
+          "t1": 69.85833357142857,
+          "caption": "Two people standing on a snowy hill, one of them is helping the other with their skis.",
+          "tags": []
+        },
+        {
+          "t0": 69.85833357142857,
+          "t1": 83.83000028571428,
+          "caption": "A group of people wearing winter gear are walking up a snowy hill.",
+          "tags": []
+        },
+        {
+          "t0": 83.83000028571428,
+          "t1": 97.801667,
+          "caption": "Two people standing on a snowy mountain top with ski poles.",
+          "tags": []
+        }
+      ]
+    },
+    {
       "id": "IMG_0697",
       "src": "IMG_0697.mov",
       "start": 0,
@@ -54,8 +193,7 @@
           "caption": "A person wearing grey shoes is standing next to a sheep.",
           "tags": []
         }
-      ],
-      "thumbnail": "https://cepqwszgiwmgshzhobuq.supabase.co/storage/v1/object/public/thumbnails/fixture/IMG_0697.jpg"
+      ]
     },
     {
       "id": "IMG_0848",
@@ -83,8 +221,7 @@
           "caption": "Two people standing on a snowy mountain with their arms around each other, wearing skis.",
           "tags": []
         }
-      ],
-      "thumbnail": "https://cepqwszgiwmgshzhobuq.supabase.co/storage/v1/object/public/thumbnails/fixture/IMG_0848.jpg"
+      ]
     },
     {
       "id": "IMG_0872",
@@ -124,8 +261,7 @@
           "caption": "Two people are playing in the snow with sleds and one is sitting on a red sled.",
           "tags": []
         }
-      ],
-      "thumbnail": "https://cepqwszgiwmgshzhobuq.supabase.co/storage/v1/object/public/thumbnails/fixture/IMG_0872.jpg"
+      ]
     },
     {
       "id": "IMG_1010",
@@ -163,8 +299,7 @@
           "caption": "A man and a woman are standing in front of a waterfall, smiling and posing for a picture.",
           "tags": []
         }
-      ],
-      "thumbnail": "https://cepqwszgiwmgshzhobuq.supabase.co/storage/v1/object/public/thumbnails/fixture/IMG_1010.jpg"
+      ]
     }
   ]
 }
