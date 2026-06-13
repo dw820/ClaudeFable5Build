@@ -2,7 +2,7 @@
  * AutoCut agent service — the long-lived Daytona worker (plan Component 2).
  *
  * It is the agent's persistent home: subscribe to new runs, claim them so no two
- * workers double-execute, run the tested self-correction loop, learn across runs
+ * workers double-execute, run the autonomous agent session, learn across runs
  * via file memory, and deliver the finished cut back through Supabase.
  *
  *   ┌─────────── Supabase (the two-way bus) ───────────┐
@@ -13,10 +13,10 @@
  *   boot: reclaim queued ──▶ claimRun (queued→running, one winner)
  *                                   │ won?
  *                                   ▼
- *   memory.consult(MEMORY_DIR,style) ──▶ build runLoop input (brief+rubric+rules)
+ *   memory.consult(MEMORY_DIR,style) ──▶ build session input (brief+rubric+rules)
  *                                   │
  *                                   ▼
- *   runLoop(input, deps, {maxIters:4, passThreshold:7})
+ *   runAgentSession(input, {query, tools, caps}) — Claude drives; caps fence
  *        emit = makeSupabaseEmit(client, runId) ──Realtime──▶ events ──▶ UI
  *                                   │ pass?
  *                  ┌────────────────┴───────────────┐
@@ -33,10 +33,10 @@
  * ONLY at the entry point (`main`), never at import — so this file is importable
  * (and `executeRun` unit-testable) with no network and no env.
  */
-import { runLoop, type LoopDeps, type Rubric } from "../loop/controller.js";
-import { makeStubDeps, SAMPLE_LIBRARY, VIRAL_RUBRIC } from "../loop/stubs.js";
-import { createLoopDeps } from "../loop/deps.js";
-import { AnthropicClient } from "../llm/client.js";
+import type { Rubric, LoopResult } from "../loop/controller.js";
+import { SAMPLE_LIBRARY, VIRAL_RUBRIC } from "../loop/stubs.js";
+import { runAgentSession } from "../agent/session.js";
+import { makeStubToolImpls } from "../agent/tools.js";
 import { PASS_THRESHOLD } from "../constants.js";
 import type { LoopEvent, ClipLibrary } from "../loop/types.js";
 import { makeSupabaseEmit, type InsertTable } from "./events.js";
@@ -50,9 +50,6 @@ import {
   type RunRow,
 } from "./runs.js";
 import { consult, distill, DEFAULT_MEMORY_DIR } from "../memory/index.js";
-
-const MAX_ITERS = 4;
-const STUB_DELAY_MS = 600;
 
 /** The slice of a Supabase Storage bucket the agent uploads through. */
 export interface StorageBucket {
@@ -81,8 +78,11 @@ export interface AgentClient {
 export interface ExecuteRunOptions {
   /** Memory root (persistent on Daytona; temp dir in tests). */
   memoryDir?: string;
-  /** Build the loop deps for a run; defaults to the paced stub money-shot. */
-  makeDeps?: (emit: (e: LoopEvent) => void) => LoopDeps;
+  /** Run one agent session for a run; defaults to the real Agent SDK session. */
+  runSession?: (
+    input: { brief: string; rubric: Rubric; library: ClipLibrary },
+    emit: (e: LoopEvent) => void,
+  ) => Promise<LoopResult>;
   /** Storage client for uploading the shipped render (optional in tests). */
   storage?: StorageClient;
   /** Read the rendered bytes for upload. Defaults to a no-op (stub path). */
@@ -141,15 +141,13 @@ export async function executeRun(
     library: SAMPLE_LIBRARY as ClipLibrary,
   };
 
-  const makeDeps =
-    opts.makeDeps ?? ((e) => makeStubDeps({ emit: e, delayMs: STUB_DELAY_MS }));
-  const deps = makeDeps(emit);
+  const runSession = opts.runSession ?? defaultRunSession;
 
   try {
-    const result = await runLoop(input, deps, {
-      maxIters: MAX_ITERS,
-      passThreshold: rubric.passThreshold,
-    });
+    const result = await runSession(
+      { brief: input.brief, rubric: input.rubric, library: input.library },
+      emit,
+    );
 
     const shippedRef = result.shipped?.render.output;
 
@@ -234,6 +232,30 @@ export async function reclaimQueued(
   }
 }
 
+/** Default session: the autonomous Agent SDK run with the selected tool impls. */
+async function defaultRunSession(
+  input: { brief: string; rubric: Rubric; library: ClipLibrary },
+  emit: (e: LoopEvent) => void,
+): Promise<LoopResult> {
+  const { makeRealQuery, makeRealBuildServer } = await import("../agent/sdk.js");
+  const real = process.env.AGENT_TOOLS === "real";
+  if (real) {
+    // Real tool impls (ffmpeg/Remotion/verifier) are out of scope for this milestone.
+    throw new Error("AGENT_TOOLS=real not implemented yet — set AGENT_TOOLS=stub");
+  }
+  return runAgentSession(
+    { brief: input.brief },
+    {
+      query: await makeRealQuery(),
+      buildServer: await makeRealBuildServer(),
+      toolImpls: makeStubToolImpls(),
+      rubric: input.rubric,
+      library: input.library,
+      emit,
+    },
+  );
+}
+
 /**
  * Entry point — the ONLY place a real @supabase/supabase-js client (and the real
  * render deps) are constructed. Imported modules stay network-free.
@@ -254,7 +276,7 @@ async function main(): Promise<void> {
   const storage = supabase.storage as unknown as StorageClient;
 
   const memoryDir = process.env.MEMORY_DIR ?? DEFAULT_MEMORY_DIR;
-  const real = process.env.RENDER_MODE === "real";
+  const tools = process.env.AGENT_TOOLS === "real" ? "real" : "stub";
 
   const opts: ExecuteRunOptions = {
     memoryDir,
@@ -268,19 +290,9 @@ async function main(): Promise<void> {
         return null;
       }
     },
-    makeDeps: real
-      ? (emit) =>
-          createLoopDeps({
-            library: SAMPLE_LIBRARY,
-            llm: new AnthropicClient(),
-            emit,
-          })
-      : (emit) => makeStubDeps({ emit, delayMs: STUB_DELAY_MS }),
   };
 
-  console.log(
-    `[agent] online — RENDER_MODE=${real ? "real" : "stub"}, MEMORY_DIR=${memoryDir}`,
-  );
+  console.log(`[agent] online — AGENT_TOOLS=${tools}, MEMORY_DIR=${memoryDir}`);
 
   // Restart-safe: sweep up anything queued while we were down.
   await reclaimQueued(client, opts);
