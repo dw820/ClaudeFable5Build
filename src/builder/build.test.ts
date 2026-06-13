@@ -147,6 +147,18 @@ describe("makeBuildEdl", () => {
     expect(edl.segments.some((s) => s.clipId === "DOES_NOT_EXIST")).toBe(false);
   });
 
+  it("forces lut to null even when the model emits a descriptive name", async () => {
+    // The model often invents a LUT name (e.g. "punchy-cool-contrast"), which the
+    // renderer would treat as a missing .cube file and fail. No .cube LUT files
+    // exist this increment, so the builder must null it.
+    const withLut: Edl = EdlSchema.parse(JSON.parse(goodEdlResponse()));
+    const response = JSON.stringify({ ...withLut, lut: "punchy-cool-contrast" });
+
+    const result = await makeBuildEdl(new FakeLlmClient([response]))(ctx());
+    const edl = EdlSchema.parse(result);
+    expect(edl.lut).toBe(null);
+  });
+
   it("nudges an over-long EDL back within target tolerance", async () => {
     // 4 segments × 10s = 40s, target is 20s — must be trimmed toward target.
     const longEdl: Edl = {

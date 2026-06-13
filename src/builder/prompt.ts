@@ -103,7 +103,7 @@ function describeSchema(targetLenS: number, aspect: Edl["aspect"]): string {
     '  "edlId": string,',
     `  "aspect": "${aspect}",`,
     `  "targetLenS": ${targetLenS},`,
-    '  "lut": string | null,',
+    '  "lut": null,                 // no color-grade LUTs available yet — always null',
     '  "segments": [',
     "    {",
     '      "clipId": string (must exist in the library),',
