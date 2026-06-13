@@ -77,8 +77,7 @@ fi
 
 # 6. De-risk the SDK headless (the spec's flagged risk) -----------------------
 log "Checking the Agent SDK loads headless..."
-( cd "$REPO_DIR" && node -e \
-  "import('@anthropic-ai/claude-agent-sdk').then(m=>console.log('  sdk ok', typeof m.query)).catch(e=>{console.error('  SDK LOAD FAILED:',e.message);process.exit(1)})" )
+( cd "$REPO_DIR" && node scripts/sdk-check.mjs )
 
 cat <<EOF
 
