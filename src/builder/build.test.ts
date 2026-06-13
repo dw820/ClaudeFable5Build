@@ -98,6 +98,24 @@ describe("buildPrompt (pure)", () => {
     // Previous EDL is summarized for context.
     expect(prompt.user).toContain("c01");
   });
+
+  it("renders timed scene lines when a clip has more than one scene", () => {
+    const lib: ClipLibrary = ClipLibrarySchema.parse({
+      projectId: "p",
+      clips: [{
+        id: "vlog1", src: "v.mp4", start: 0, end: 30, duration: 30,
+        resolution: [1080, 1920], transcript: [], caption: "a vlog", tags: ["vlog"],
+        scenes: [
+          { t0: 0, t1: 9.5, caption: "unboxing on a desk", tags: ["product"] },
+          { t0: 24, t1: 31, caption: "walking outside", tags: ["outdoor"] },
+        ],
+      }],
+    });
+    const prompt = buildPrompt(ctx({ library: lib }));
+    expect(prompt.user).toContain("scenes:");
+    expect(prompt.user).toContain('0.0–9.5s: "unboxing on a desk"');
+    expect(prompt.user).toContain('24.0–31.0s: "walking outside"');
+  });
 });
 
 describe("makeBuildEdl", () => {

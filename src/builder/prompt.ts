@@ -43,6 +43,18 @@ function transcriptSnippet(clip: Clip, maxWords = 12): string {
   return words.join(" ") + suffix;
 }
 
+/** One-decimal second formatter for scene timecodes. */
+const fmtS = (n: number): string => n.toFixed(1);
+
+/** Timed scene lines for a clip, or "" when it has 0–1 scenes (no extra signal). */
+function describeScenes(clip: Clip): string {
+  if (!clip.scenes || clip.scenes.length <= 1) return "";
+  const lines = clip.scenes.map(
+    (s) => `    ${fmtS(s.t0)}–${fmtS(s.t1)}s: "${s.caption}" [${s.tags.join(", ")}]`,
+  );
+  return ` | scenes:\n${lines.join("\n")}`;
+}
+
 /** Render one clip as a compact, model-readable line. */
 function describeClip(clip: Clip): string {
   return [
@@ -51,7 +63,7 @@ function describeClip(clip: Clip): string {
     `tags=[${clip.tags.join(", ")}]`,
     `caption="${clip.caption}"`,
     `transcript="${transcriptSnippet(clip)}"`,
-  ].join(" | ");
+  ].join(" ") + describeScenes(clip);
 }
 
 /** The rubric dimensions block, keyed by the canonical RUBRIC_DIMENSIONS. */
