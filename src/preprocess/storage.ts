@@ -20,12 +20,19 @@ import type { ClipLibrary } from "../loop/types.js";
 /** The private bucket holding source clips + per-project clips.json manifests. */
 export const SOURCE_CLIPS_BUCKET = "source-clips";
 
-/** `storage://<projectId>/<src>` — the ref a published clip points at. */
+/**
+ * `storage://<projectId>/<src>` — the ref a published clip points at. `src` may
+ * include subpaths (e.g. `clips/wipeout.mp4`), which are preserved in the ref.
+ */
 export function clipStorageRef(projectId: string, src: string): string {
   return `storage://${projectId}/${src}`;
 }
 
-/** `<projectId>/<src>` — the object key (path within the bucket) for a clip. */
+/**
+ * `<projectId>/<src>` — the object key (path within the bucket) for a clip.
+ * `src` may include subpaths (e.g. `clips/wipeout.mp4`), which are preserved in
+ * the key.
+ */
 export function clipStorageKey(projectId: string, src: string): string {
   return `${projectId}/${src}`;
 }
@@ -48,6 +55,7 @@ export function contentTypeFor(filename: string): string {
     case ".mkv":
       return "video/x-matroska";
     default:
+      // Unknown extensions deliberately fall back to a generic binary type.
       return "application/octet-stream";
   }
 }
