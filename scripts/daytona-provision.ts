@@ -50,6 +50,8 @@ const REPO_URL = process.env.GITHUB_TOKEN
 const SANDBOX_NAME = process.env.DAYTONA_SANDBOX_NAME ?? "autocut";
 const VOLUME_NAME = "autocut-memory";
 const MEMORY_MOUNT = "/workspace/memory";
+const MEDIA_MOUNT = "/home/daytona/media";
+const REAL_TOOLS = (process.env.AGENT_TOOLS ?? "stub") === "real";
 const REPO_DIR = "~/autocut";
 
 // Source nvm so the default image's nvm-installed Node is on PATH in the
@@ -99,6 +101,7 @@ async function main() {
         SUPABASE_URL: process.env.SUPABASE_URL!,
         SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
         MEMORY_DIR: MEMORY_MOUNT,
+        MEDIA_DIR: MEDIA_MOUNT,
         AGENT_TOOLS: process.env.AGENT_TOOLS ?? "stub",
       },
       volumes: [{ volumeId: volume.id, mountPath: MEMORY_MOUNT }],
@@ -135,6 +138,17 @@ async function main() {
       `git -C ${REPO_DIR} remote set-url origin https://${REPO_HOST}`,
   );
   await run("npm install", `cd ${REPO_DIR} && npm install`, 900);
+  if (REAL_TOOLS) {
+    await run(
+      "install ffmpeg + font",
+      "sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core",
+      900,
+    );
+    await run(
+      "fetch source clips",
+      `cd ${REPO_DIR} && MEDIA_DIR=${MEDIA_MOUNT} node scripts/fetch-clips.mjs`,
+    );
+  }
   await run("ensure memory dir", `mkdir -p ${MEMORY_MOUNT}`);
   await run("SDK de-risk check", `cd ${REPO_DIR} && node scripts/sdk-check.mjs`);
 
