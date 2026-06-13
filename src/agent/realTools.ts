@@ -50,14 +50,11 @@ export function makeRealToolImpls(deps: RealToolDeps): ToolImpls {
     deps.render ?? makeRender(deps.library, { cutVideo: realCutVideo, applyOverlay: ffmpegOnlyOverlay });
   const gradeFn = deps.grade ?? makeGrade(deps.llm, { exec: deps.exec ?? defaultExec });
 
-  let iteration = 0;
-
   return {
     async searchClips(_query, library) {
       return library.clips;
     },
     async buildEdl(clipIds, rationale, library) {
-      iteration += 1;
       const scoped =
         clipIds.length > 0
           ? { ...library, clips: library.clips.filter((c) => clipIds.includes(c.id)) }
@@ -65,13 +62,15 @@ export function makeRealToolImpls(deps: RealToolDeps): ToolImpls {
       // If the selection matched nothing in the library, fall back to the full set.
       const forBuild = scoped.clips.length > 0 ? scoped : library;
       const brief = rationale ? `${deps.brief}\n\nEditor's note: ${rationale}` : deps.brief;
-      const ctx: BuildContext = { brief, rubric: deps.rubric, library: forBuild, iteration };
+      // Agent mode: the agent owns self-correction (conveyed via rationale, folded
+      // into the brief above), so every build is a fresh, non-revision build.
+      const ctx: BuildContext = { brief, rubric: deps.rubric, library: forBuild, iteration: 1 };
       return buildEdlFn(ctx);
     },
-    render(edl) {
+    async render(edl) {
       return renderFn(edl);
     },
-    grade(render, rubric) {
+    async grade(render, rubric) {
       return gradeFn(render, rubric);
     },
   };

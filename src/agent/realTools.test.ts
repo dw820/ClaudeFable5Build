@@ -43,20 +43,26 @@ describe("makeRealToolImpls", () => {
     expect(captured[0]!.library.clips.map((c) => c.id)).toEqual(["c01", "c03"]);
   });
 
-  it("buildEdl folds the rationale into the brief and increments iteration", async () => {
+  it("buildEdl folds the rationale into the brief", async () => {
     const { impls, captured } = makeWithSpyBuild();
     await impls.buildEdl(["c01"], "punchy open", LIB);
     await impls.buildEdl(["c02"], "", LIB);
     expect(captured[0]!.brief).toContain("Make a viral short");
     expect(captured[0]!.brief).toContain("punchy open");
     expect(captured[0]!.iteration).toBe(1);
-    expect(captured[1]!.iteration).toBe(2);
+    expect(captured[1]!.iteration).toBe(1);
     expect(captured[1]!.brief).toBe("Make a viral short");
   });
 
   it("buildEdl falls back to the full library when clipIds is empty", async () => {
     const { impls, captured } = makeWithSpyBuild();
     await impls.buildEdl([], "", LIB);
+    expect(captured[0]!.library.clips.map((c) => c.id)).toEqual(["c01", "c02", "c03"]);
+  });
+
+  it("buildEdl falls back to the full library when no clipIds match", async () => {
+    const { impls, captured } = makeWithSpyBuild();
+    await impls.buildEdl(["nope", "missing"], "", LIB);
     expect(captured[0]!.library.clips.map((c) => c.id)).toEqual(["c01", "c02", "c03"]);
   });
 
