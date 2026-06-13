@@ -105,18 +105,25 @@ async function main() {
         AGENT_TOOLS: process.env.AGENT_TOOLS ?? "stub",
       },
       volumes: [{ volumeId: volume.id, mountPath: MEMORY_MOUNT }],
-      // Default sandbox (~1 vCPU/1 GB) OOM-kills heavy ffmpeg renders (a 98s
-      // source → 1080x1920 filter_complex). 8 GiB gives headroom; 4 vCPU speeds
-      // x264 ultrafast. Override via DAYTONA_CPU / DAYTONA_MEMORY_GB.
-      resources: {
-        cpu: Number(process.env.DAYTONA_CPU ?? 4),
-        memory: Number(process.env.DAYTONA_MEMORY_GB ?? 8),
-      },
       autoStopInterval: 60, // minutes idle → auto-stop (cost control)
     },
     { timeout: 180 },
   );
   console.log(`  sandbox id: ${sandbox.id}`);
+
+  // Default sandbox (~1 vCPU/1 GB) OOM-kills heavy ffmpeg renders (a 98s source →
+  // 1080x1920 filter_complex). Resources can't be set at create on a snapshot, so
+  // resize after. 8 GiB gives headroom; 4 vCPU speeds x264 ultrafast. Non-fatal:
+  // if resize is unavailable, provisioning continues on default resources.
+  const cpu = Number(process.env.DAYTONA_CPU ?? 4);
+  const memGb = Number(process.env.DAYTONA_MEMORY_GB ?? 8);
+  try {
+    console.log(`▶ resize sandbox → ${cpu} vCPU / ${memGb} GiB`);
+    await sandbox.resize({ cpu, memory: memGb });
+    console.log("  resized");
+  } catch (e) {
+    console.log(`  resize failed (${(e as Error).message}); continuing on default resources`);
+  }
 
   const proc = sandbox.process;
 
