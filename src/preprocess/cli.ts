@@ -17,11 +17,8 @@ import { basename, extname, join, relative } from "node:path";
 import { MEDIA_DIR_DEFAULT } from "./constants.js";
 import { makeReplicateRunner, type ReplicateRunner } from "./replicateClient.js";
 import { transcribeClip } from "./transcribe.js";
-import {
-  ffmpegFrameSampler,
-  understandFrames,
-  type ExecFn,
-} from "./frameUnderstand.js";
+import { understandScenes, type ExecFn } from "./frameUnderstand.js";
+import { detectScenes } from "./scenes.js";
 import {
   assembleLibrary,
   writeClipsJson,
@@ -109,12 +106,17 @@ export function clipIdFromPath(path: string): string {
 }
 
 /**
- * Run all three steps for one clip. Exposed so a custom driver can inject test
- * doubles; `runDirectory` wires the production clients.
+ * Run all pipeline steps for one clip. Exposed so a custom driver can inject
+ * test doubles; `runDirectory` wires the production clients.
+ *
+ * Scene detection needs the probe duration, so it runs after probe completes.
+ * Frame sampling for scenes uses the binary-safe exec (JPEG bytes on stdout);
+ * scene detection uses the text exec (showinfo lines on stderr).
  */
 export async function preprocessClip(
   runner: ReplicateRunner,
-  sampler: ReturnType<typeof ffmpegFrameSampler>,
+  execBinary: ExecFn,
+  execText: ExecFn,
   probe: (path: string) => Promise<ClipMeta>,
   mediaDir: string,
   absPath: string,
@@ -124,19 +126,25 @@ export async function preprocessClip(
   // Replicate SDK auto-uploads a Blob/File input and substitutes the hosted URL.
   // The named File preserves the extension so whisper can demux the container.
   const audio = new File([await readFile(absPath)], basename(absPath));
-  const [transcript, understanding, meta] = await Promise.all([
+  const [transcript, meta] = await Promise.all([
     transcribeClip(runner, { audio }),
-    understandFrames(runner, sampler, { clipPath: absPath }),
     probe(absPath),
   ]);
+  // Scene detection needs the duration, so it runs after probe. Frame sampling
+  // for scenes uses the binary-safe exec (JPEG bytes); detection uses the text
+  // exec (showinfo on stderr).
+  const windows = await detectScenes(execText, absPath, meta.durationS);
+  const scenes = await understandScenes(runner, execBinary, absPath, windows);
   return {
     id: clipIdFromPath(absPath),
     // clip.src is the local path RELATIVE to MEDIA_DIR (the frozen convention).
     src: relative(mediaDir, absPath),
     meta,
     transcript,
-    caption: understanding.caption,
-    tags: understanding.tags,
+    // caption/tags are derived from scenes in buildClip; leave blanks here.
+    caption: "",
+    tags: [],
+    scenes,
   };
 }
 
@@ -147,7 +155,6 @@ export async function runDirectory(
   projectId: string,
 ): Promise<void> {
   const runner = makeReplicateRunner();
-  const sampler = ffmpegFrameSampler(execBinary);
 
   const entries = await readdir(mediaDir, { withFileTypes: true });
   const files = entries
@@ -160,7 +167,7 @@ export async function runDirectory(
   }
 
   const parts = await Promise.all(
-    files.map((f) => preprocessClip(runner, sampler, probeClip, mediaDir, f)),
+    files.map((f) => preprocessClip(runner, execBinary, execText, probeClip, mediaDir, f)),
   );
 
   let library = assembleLibrary(projectId, parts);
