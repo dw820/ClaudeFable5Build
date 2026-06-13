@@ -17,7 +17,40 @@ From the Supabase dashboard (Settings → API), grab:
 - `SUPABASE_URL` (Project URL)
 - `SUPABASE_SERVICE_ROLE_KEY` (the **service_role** secret — not the anon key)
 
+## Provision Daytona (laptop, once)
+
+The repo carries no Daytona config — provisioning is via the CLI.
+
+1. **Account + key:** sign up at [app.daytona.io](https://app.daytona.io), then **Keys → Create Key** (copy it — shown once).
+2. **Install + auth the CLI:**
+   ```bash
+   brew install daytonaio/cli/daytona && brew trust daytonaio/cli   # macOS
+   daytona login                                                    # or: export DAYTONA_API_KEY=<key>
+   ```
+3. **Persistent volume** (so file memory survives restarts):
+   ```bash
+   daytona volume create autocut-memory
+   ```
+4. **Create the sandbox with the volume mounted:**
+   ```bash
+   daytona create --name autocut --volume autocut-memory:/workspace/memory
+   ```
+   Add `--snapshot daytona-medium` if you hit resource limits. The default
+   `daytonaio/sandbox` image (0.8.0) ships **Node 25 via nvm** as user `daytona`
+   (home `/home/daytona`), so Node is already ≥ 20 — no install needed.
+
 ## Sandbox
+
+Shell in (`daytona ssh autocut`), then run the setup script — it ensures Node ≥ 20, clones
+this repo (branch `feat/autonomous-agent-daytona`), `npm install`s, writes a `.daytona.env`
+template, and runs the SDK de-risk check (steps 1–4 below, automated):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dw820/ClaudeFable5Build/feat/autonomous-agent-daytona/scripts/daytona-setup.sh | bash
+cd ~/autocut && $EDITOR .daytona.env   # paste keys, then: source .daytona.env
+```
+
+Or do it by hand:
 
 1. Create a Daytona sandbox from this repo; Node **≥ 20**.
 2. `npm install`.
