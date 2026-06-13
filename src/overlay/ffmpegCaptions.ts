@@ -110,6 +110,10 @@ export function buildFfmpegCaptionArgs(basePath: string, outPath: string, edl: E
     "copy",
     "-preset",
     "ultrafast",
+    // Cap x264 threads: the drawtext re-encode hits the same 1 GiB cgroup /
+    // 48-core thread-explosion SIGKILL as the cut pass (see ffmpegArgs).
+    "-threads",
+    process.env.FFMPEG_THREADS ?? "4",
     outPath,
   ];
 }

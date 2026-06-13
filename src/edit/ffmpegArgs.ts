@@ -34,6 +34,14 @@ export const mediaDir = (): string => process.env.MEDIA_DIR ?? "./media";
  */
 export const OUTPUT_FPS = 30;
 
+/**
+ * Cap x264 threads. The Daytona sandbox has a 1 GiB cgroup memory limit but sees
+ * 48 host CPUs, so x264 auto-spawns ~60 threads whose per-thread frame buffers
+ * blow the cgroup → SIGKILL at frame 0. A small fixed count stays well under the
+ * limit and still encodes fast at ultrafast. Override via FFMPEG_THREADS.
+ */
+export const ffmpegThreads = (): string => process.env.FFMPEG_THREADS ?? "4";
+
 /** Output pixel dimensions per aspect (PRD: vertical-first, 1080-class). */
 export const ASPECT_DIMENSIONS = {
   "9:16": { w: 1080, h: 1920 },
@@ -145,6 +153,8 @@ export function buildFfmpegArgs(
     "yuv420p",
     "-r",
     String(OUTPUT_FPS),
+    "-threads",
+    ffmpegThreads(),
     "-y",
     outputPath,
   );

@@ -110,20 +110,9 @@ async function main() {
     { timeout: 180 },
   );
   console.log(`  sandbox id: ${sandbox.id}`);
-
-  // Default sandbox (~1 vCPU/1 GB) OOM-kills heavy ffmpeg renders (a 98s source →
-  // 1080x1920 filter_complex). Resources can't be set at create on a snapshot, so
-  // resize after. 8 GiB gives headroom; 4 vCPU speeds x264 ultrafast. Non-fatal:
-  // if resize is unavailable, provisioning continues on default resources.
-  const cpu = Number(process.env.DAYTONA_CPU ?? 4);
-  const memGb = Number(process.env.DAYTONA_MEMORY_GB ?? 8);
-  try {
-    console.log(`▶ resize sandbox → ${cpu} vCPU / ${memGb} GiB`);
-    await sandbox.resize({ cpu, memory: memGb });
-    console.log("  resized");
-  } catch (e) {
-    console.log(`  resize failed (${(e as Error).message}); continuing on default resources`);
-  }
+  // Note: the sandbox has a 1 GiB cgroup limit but sees 48 host CPUs. ffmpeg is
+  // thread-capped (FFMPEG_THREADS, default 4) so x264 doesn't OOM the cgroup —
+  // see src/edit/ffmpegArgs.ts. No sandbox resize needed (and it's unsupported here).
 
   const proc = sandbox.process;
 
