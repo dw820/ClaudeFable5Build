@@ -1,0 +1,11 @@
+{
+  "style": "Viral Short",
+  "passThreshold": 7,
+  "dimensions": {
+    "hook_strength": "Do the first 2 seconds grab attention? The punchline or peak moment is up front — no slow pan, no throat-clearing lead-in.",
+    "pace_cut_density": "Are the cuts tight and energetic? No dragging middle; momentum builds to the end.",
+    "caption_legibility": "Are on-screen captions large, high-contrast, well-timed, and readable on a phone? Not tiny, not lagging the audio.",
+    "loopability": "Does the ending flow back into the opening so the clip loops seamlessly for replays?",
+    "on_style_trend_fit": "Does it match current Viral Short conventions — pacing, energy, framing, trend fit for 9:16 short-form?"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "edlId": "edl-sample-1",
+  "aspect": "9:16",
+  "targetLenS": 30,
+  "lut": null,
+  "segments": [
+    {
+      "clipId": "c01",
+      "in": 0.5,
+      "out": 4.0,
+      "transition": "cut",
+      "captions": [{ "text": "watch this", "t0": 0.0, "t1": 1.5, "style": "bold-center" }]
+    },
+    {
+      "clipId": "c08",
+      "in": 1.0,
+      "out": 6.0,
+      "transition": "cut",
+      "captions": [{ "text": "everyone runs", "t0": 0.0, "t1": 2.0, "style": "bold-center" }]
+    },
+    {
+      "clipId": "c04",
+      "in": 0.0,
+      "out": 2.5,
+      "transition": "crossfade",
+      "captions": []
+    },
+    {
+      "clipId": "c03",
+      "in": 0.0,
+      "out": 6.0,
+      "transition": "cut",
+      "captions": [{ "text": "paddle out", "t0": 0.2, "t1": 2.0, "style": "bold-center" }]
+    },
+    {
+      "clipId": "c06",
+      "in": 2.0,
+      "out": 8.5,
+      "transition": "crossfade",
+      "captions": []
+    },
+    {
+      "clipId": "c02",
+      "in": 0.0,
+      "out": 5.0,
+      "transition": "crossfade",
+      "captions": [{ "text": "stay till sunset", "t0": 0.0, "t1": 2.5, "style": "bold-center" }]
+    },
+    {
+      "clipId": "c01",
+      "in": 0.5,
+      "out": 3.0,
+      "transition": "cut",
+      "captions": [{ "text": "watch this", "t0": 0.0, "t1": 1.5, "style": "bold-center" }]
+    }
+  ],
+  "selectionRationale": "Open on the wipeout hook (c01) and reprise it at the end for loopability; build energy through the run (c08) and paddle (c03), use the splash (c04) as a kinetic transition, then pay off on the drone reveal (c06) into the sunset (c02)."
+}

@@ -15,6 +15,7 @@ export const TranscriptWordSchema = z.object({
   t0: z.number().nonnegative(),
   t1: z.number().nonnegative(),
 });
+export type TranscriptWord = z.infer<typeof TranscriptWordSchema>;
 
 export const ClipSchema = z.object({
   id: z.string(),

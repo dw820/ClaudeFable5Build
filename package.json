@@ -11,9 +11,20 @@
     "demo": "tsx src/loop/demo.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@remotion/cli": "^4.0.476",
+    "@remotion/renderer": "^4.0.476",
+    "@supabase/supabase-js": "^2.108.1",
+    "dotenv": "^17.4.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "remotion": "^4.0.476",
+    "replicate": "^1.4.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "tsx": "^4.22.4",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
