@@ -36,6 +36,12 @@ export const ClipSchema = z.object({
   caption: z.string(),
   tags: z.array(z.string()),
   scenes: z.array(SceneSchema).optional(),
+  /**
+   * Public URL of a pre-generated poster frame (preprocess uploads one JPEG per
+   * clip to the public `thumbnails` bucket). Absent in pure-local runs where no
+   * Storage is configured; the setup-screen grid falls back to a film icon.
+   */
+  thumbnail: z.string().url().optional(),
 });
 export type Clip = z.infer<typeof ClipSchema>;
 

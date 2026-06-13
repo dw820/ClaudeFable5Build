@@ -19,6 +19,7 @@ import {
   VLM_PROMPT,
   understandFrames,
   understandScenes,
+  extractPosterJpeg,
   type FrameSampler,
 } from "./frameUnderstand.js";
 import type { ExecFn } from "./frameUnderstand.js";
@@ -39,10 +40,14 @@ import {
   clipStorageRef,
   clipStorageKey,
   libraryKey,
+  thumbnailKey,
+  publicThumbnailUrl,
   contentTypeFor,
   uploadClip,
   uploadLibrary,
   uploadLibraryAssets,
+  uploadThumbnail,
+  THUMBNAILS_BUCKET,
   type StorageClientLike,
 } from "./storage.js";
 import { WHISPER_MODEL } from "./models.js";
@@ -373,12 +378,14 @@ interface RecordedUpload {
   upsert?: boolean;
 }
 
-/** Fake Storage client that records every upload call (including the body). */
+/** Fake Storage client that records every upload + createBucket call. */
 function fakeStorage(error: { message: string } | null = null): {
   client: StorageClientLike;
   uploads: RecordedUpload[];
+  createdBuckets: Array<{ id: string; public?: boolean }>;
 } {
   const uploads: RecordedUpload[] = [];
+  const createdBuckets: Array<{ id: string; public?: boolean }> = [];
   const client: StorageClientLike = {
     from: (bucket) => ({
       async upload(path, body, options) {
@@ -392,8 +399,12 @@ function fakeStorage(error: { message: string } | null = null): {
         return { error };
       },
     }),
+    async createBucket(id, options) {
+      createdBuckets.push({ id, public: options?.public });
+      return { error: null };
+    },
   };
-  return { client, uploads };
+  return { client, uploads, createdBuckets };
 }
 
 describe("storage helpers", () => {
@@ -498,6 +509,129 @@ describe("uploadLibraryAssets", () => {
       "proj/clips.json",
     ]);
     expect(uploaded.clips[0]!.src).toBe("storage://proj/clips/wipeout.mp4");
+  });
+});
+
+describe("thumbnails", () => {
+  it("builds thumbnail keys and deterministic public URLs", () => {
+    expect(thumbnailKey("proj", "c01")).toBe("proj/c01.jpg");
+    expect(publicThumbnailUrl("https://x.supabase.co", "proj/c01.jpg")).toBe(
+      "https://x.supabase.co/storage/v1/object/public/thumbnails/proj/c01.jpg",
+    );
+    // Trailing slash on the project URL is normalized, not doubled.
+    expect(publicThumbnailUrl("https://x.supabase.co/", "proj/c01.jpg")).toBe(
+      "https://x.supabase.co/storage/v1/object/public/thumbnails/proj/c01.jpg",
+    );
+  });
+
+  it("uploads a poster to the public bucket and returns its URL", async () => {
+    const { client, uploads } = fakeStorage();
+    const url = await uploadThumbnail(
+      client,
+      "https://x.supabase.co",
+      "proj",
+      "c01",
+      new Uint8Array([0xff, 0xd8]),
+    );
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]).toMatchObject({
+      bucket: THUMBNAILS_BUCKET,
+      path: "proj/c01.jpg",
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+    expect(url).toBe(
+      "https://x.supabase.co/storage/v1/object/public/thumbnails/proj/c01.jpg",
+    );
+  });
+
+  it("throws when a poster upload reports an error", async () => {
+    const { client } = fakeStorage({ message: "denied" });
+    await expect(
+      uploadThumbnail(client, "https://x.supabase.co", "proj", "c01", new Uint8Array([1])),
+    ).rejects.toThrow(/thumbnail upload failed \(c01\): denied/);
+  });
+
+  it("stamps thumbnail URLs onto clips + the manifest when posters are provided", async () => {
+    const { client, uploads, createdBuckets } = fakeStorage();
+    const lib = assembleLibrary("proj", [
+      partFixture({ id: "c01", src: "a.mov" }),
+      partFixture({ id: "c02", src: "b.mp4" }),
+    ]);
+    const readClip = async (src: string) => new Uint8Array([src.length]);
+    const posters: Record<string, Uint8Array | null> = {
+      c01: new Uint8Array([0xff, 0xd8]),
+      c02: null, // c02 has no poster — stays iconless
+    };
+
+    const uploaded = await uploadLibraryAssets(client, "source-clips", "proj", lib, readClip, {
+      supabaseUrl: "https://x.supabase.co",
+      posterFor: (clip) => posters[clip.id] ?? null,
+    });
+
+    // Public bucket created once, public.
+    expect(createdBuckets).toEqual([{ id: THUMBNAILS_BUCKET, public: true }]);
+
+    // Only c01's poster was uploaded; the upload order interleaves before the manifest.
+    expect(uploads.map((u) => `${u.bucket}:${u.path}`)).toEqual([
+      "source-clips:proj/a.mov",
+      "thumbnails:proj/c01.jpg",
+      "source-clips:proj/b.mp4",
+      "source-clips:proj/clips.json",
+    ]);
+
+    // Returned library carries the URL for c01, nothing for c02.
+    expect(uploaded.clips[0]!.thumbnail).toBe(
+      "https://x.supabase.co/storage/v1/object/public/thumbnails/proj/c01.jpg",
+    );
+    expect(uploaded.clips[1]!.thumbnail).toBeUndefined();
+
+    // The persisted manifest matches the returned library (thumbnail included).
+    const manifest = uploads.find((u) => u.path === "proj/clips.json");
+    const parsed = JSON.parse(manifest!.body as string) as {
+      clips: { id: string; thumbnail?: string }[];
+    };
+    expect(parsed.clips[0]!.thumbnail).toBe(uploaded.clips[0]!.thumbnail);
+    expect(parsed.clips[1]!.thumbnail).toBeUndefined();
+  });
+
+  it("uploads no posters and creates no bucket when thumbnails arg is omitted", async () => {
+    const { client, uploads, createdBuckets } = fakeStorage();
+    const lib = assembleLibrary("proj", [partFixture({ id: "c01", src: "a.mov" })]);
+    const uploaded = await uploadLibraryAssets(
+      client,
+      "source-clips",
+      "proj",
+      lib,
+      async () => new Uint8Array([1]),
+    );
+    expect(createdBuckets).toEqual([]);
+    expect(uploads.map((u) => u.path)).toEqual(["proj/a.mov", "proj/clips.json"]);
+    expect(uploaded.clips[0]!.thumbnail).toBeUndefined();
+  });
+});
+
+describe("extractPosterJpeg", () => {
+  // Minimal valid JPEG byte stream (SOI…EOI) so splitJpegs finds one frame.
+  const jpeg = Buffer.from([0xff, 0xd8, 0x12, 0x34, 0xff, 0xd9]).toString("binary");
+
+  it("returns the JPEG bytes and requests a downscaled frame at the timestamp", async () => {
+    const calls: string[][] = [];
+    const exec: ExecFn = async (_cmd, args) => {
+      calls.push(args);
+      return { stdout: jpeg, stderr: "" };
+    };
+    const bytes = await extractPosterJpeg(exec, "clip.mov", 1);
+    expect(bytes).toEqual(new Uint8Array([0xff, 0xd8, 0x12, 0x34, 0xff, 0xd9]));
+    // Seeks to the timestamp, takes one frame, scales to 420px wide.
+    expect(calls[0]).toEqual(
+      expect.arrayContaining(["-ss", "1", "-frames:v", "1", "-vf", "scale=420:-1"]),
+    );
+  });
+
+  it("returns null when ffmpeg emits no frame", async () => {
+    const exec: ExecFn = async () => ({ stdout: "", stderr: "" });
+    expect(await extractPosterJpeg(exec, "clip.mov", 1)).toBeNull();
   });
 });
 

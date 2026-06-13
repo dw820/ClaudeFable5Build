@@ -17,7 +17,7 @@ import { basename, extname, join, relative } from "node:path";
 import { MEDIA_DIR_DEFAULT } from "./constants.js";
 import { makeReplicateRunner, type ReplicateRunner } from "./replicateClient.js";
 import { transcribeClip } from "./transcribe.js";
-import { understandScenes, type ExecFn } from "./frameUnderstand.js";
+import { understandScenes, extractPosterJpeg, type ExecFn } from "./frameUnderstand.js";
 import { detectScenes } from "./scenes.js";
 import {
   assembleLibrary,
@@ -29,6 +29,7 @@ import {
   makeStorageClient,
   uploadLibraryAssets,
   SOURCE_CLIPS_BUCKET,
+  THUMBNAILS_BUCKET,
 } from "./storage.js";
 
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv"]);
@@ -135,6 +136,14 @@ export async function preprocessClip(
   // exec (showinfo on stderr).
   const windows = await detectScenes(execText, absPath, meta.durationS);
   const scenes = await understandScenes(runner, execBinary, absPath, windows);
+  // Poster for the setup-screen grid: one downscaled frame near the clip start
+  // (clamped for very short clips). A failed extraction degrades to no thumbnail
+  // (the grid shows a film icon) rather than failing the whole clip.
+  const poster = await extractPosterJpeg(
+    execBinary,
+    absPath,
+    Math.min(1, meta.durationS / 2),
+  ).catch(() => null);
   return {
     id: clipIdFromPath(absPath),
     // clip.src is the local path RELATIVE to MEDIA_DIR (the frozen convention).
@@ -145,6 +154,7 @@ export async function preprocessClip(
     caption: "",
     tags: [],
     scenes,
+    poster,
   };
 }
 
@@ -174,19 +184,24 @@ export async function runDirectory(
 
   // Upload to Storage when configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).
   // On upload, clip.src is rewritten to a storage:// ref; otherwise src stays a
-  // local relative path (pure-local dev still works).
+  // local relative path (pure-local dev still works). Posters are uploaded to the
+  // public thumbnails bucket and their URLs stamped onto clip.thumbnail.
   const storage = makeStorageClient();
   if (storage) {
+    const posters = new Map(parts.map((p) => [p.id, p.poster ?? null]));
     library = await uploadLibraryAssets(
       storage,
       SOURCE_CLIPS_BUCKET,
       projectId,
       library,
       (src) => readFile(join(mediaDir, src)).then((b) => new Uint8Array(b)),
+      { supabaseUrl: process.env.SUPABASE_URL!, posterFor: (clip) => posters.get(clip.id) ?? null },
     );
+    const thumbCount = library.clips.filter((c) => c.thumbnail).length;
     // eslint-disable-next-line no-console
     console.log(
-      `uploaded ${library.clips.length} clips + manifest → ${SOURCE_CLIPS_BUCKET}/${projectId}/`,
+      `uploaded ${library.clips.length} clips + manifest → ${SOURCE_CLIPS_BUCKET}/${projectId}/ ` +
+        `(${thumbCount} thumbnails → ${THUMBNAILS_BUCKET}/${projectId}/)`,
     );
   }
 

@@ -9,6 +9,8 @@ interface Clip {
   src: string;
   duration: number;
   caption: string;
+  /** Public URL of a pre-generated poster frame; absent clips fall back to the film icon. */
+  thumbnail?: string;
 }
 
 interface ClipLibrary {
@@ -87,7 +89,16 @@ export function Library() {
               className="relative flex aspect-[9/13] items-center justify-center rounded-[8px] border border-line bg-[var(--sink)] text-faint"
               title={clip.caption}
             >
-              <FilmIcon />
+              {clip.thumbnail ? (
+                <img
+                  src={clip.thumbnail}
+                  alt={clip.caption}
+                  loading="lazy"
+                  className="absolute inset-0 h-full w-full rounded-[8px] object-cover"
+                />
+              ) : (
+                <FilmIcon />
+              )}
               <span className="absolute bottom-1 right-1 rounded-[3px] bg-ink px-1 text-[9px] text-white tnum">
                 {fmt(clip.duration)}
               </span>

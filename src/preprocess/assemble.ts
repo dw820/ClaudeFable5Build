@@ -64,6 +64,12 @@ export interface ClipParts {
   tags: string[];
   /** Per-scene captions from understandScenes; absent/empty for single-scene clips. */
   scenes?: Scene[];
+  /**
+   * Poster JPEG bytes (sidecar, NOT part of the Clip schema). Carried so the
+   * Storage step can upload it and stamp the resulting public URL onto
+   * clip.thumbnail. Null when poster extraction failed or ran local-only.
+   */
+  poster?: Uint8Array | null;
 }
 
 /** Caption of the scene covering the clip's temporal midpoint (deterministic). */

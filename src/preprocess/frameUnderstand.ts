@@ -199,6 +199,32 @@ export async function sampleFrameAt(exec: ExecFn, clipPath: string, atS: number)
 }
 
 /**
+ * Extract a single downscaled JPEG poster frame at `atS` seconds, as raw bytes
+ * ready to upload to Storage. Separate from `sampleFrameAt` (which returns a
+ * full-res data URI for the VLM): posters are scaled to 420px wide to keep the
+ * setup-screen grid light. Returns null when ffmpeg emits no frame (e.g. seek
+ * past the end of a very short clip).
+ */
+export async function extractPosterJpeg(
+  exec: ExecFn,
+  clipPath: string,
+  atS: number,
+): Promise<Uint8Array | null> {
+  const { stdout } = await exec("ffmpeg", [
+    "-ss", String(atS),
+    "-i", clipPath,
+    "-frames:v", "1",
+    "-vf", "scale=420:-1",
+    "-f", "image2pipe",
+    "-vcodec", "mjpeg",
+    "pipe:1",
+  ]);
+  const buf = Buffer.from(stdout, "binary");
+  const [frame] = splitJpegs(buf);
+  return frame ? new Uint8Array(frame) : null;
+}
+
+/**
  * Caption each scene window from its midpoint frame. Sequential so test runners
  * with call-indexed fakes are deterministic; the per-clip fan-out in cli.ts
  * already runs clips in parallel. A failed frame/VLM call degrades that one
