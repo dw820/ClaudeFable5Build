@@ -2,6 +2,7 @@
 .env
 .env.local
 /media
+/incoming
 /dist
 *.log
 .DS_Store
@@ -12,3 +13,6 @@ next-env.d.ts
 /.memory
 *.tsbuildinfo
 .gstack/
+
+# brainstorming visual companion
+.superpowers/

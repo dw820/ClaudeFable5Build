@@ -1,0 +1,33 @@
+{
+  "projectId": "fixture",
+  "clips": [
+    {
+      "id": "c01",
+      "src": "IMG_0848.mov",
+      "start": 0,
+      "end": 8.733333,
+      "duration": 8.733333,
+      "resolution": [
+        1280,
+        720
+      ],
+      "transcript": [],
+      "caption": "two hikers throw their arms wide and cheer on a snowy alpine glacier, jagged peaks behind",
+      "tags": ["travel", "snow", "mountains", "celebration", "hook", "high-energy"]
+    },
+    {
+      "id": "c02",
+      "src": "IMG_1010.mov",
+      "start": 0,
+      "end": 14.57,
+      "duration": 14.57,
+      "resolution": [
+        1280,
+        720
+      ],
+      "transcript": [],
+      "caption": "smiling group selfie in a lush green alpine valley with a tall waterfall and steep cliffs",
+      "tags": ["travel", "selfie", "valley", "waterfall", "scenic", "b-roll"]
+    }
+  ]
+}

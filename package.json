@@ -15,7 +15,8 @@
     "agent": "tsx src/server/agent-server.ts",
     "provision:daytona": "tsx scripts/daytona-provision.ts",
     "fixture:make": "node scripts/make-fixture.mjs",
-    "fixture:fetch": "node scripts/fetch-clips.mjs"
+    "fixture:fetch": "node scripts/fetch-clips.mjs",
+    "smoke:real": "tsx scripts/smoke-real-tools.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.177",
