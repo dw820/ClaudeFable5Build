@@ -33,6 +33,17 @@ import {
   type PgvectorTable,
   type UpsertResult,
 } from "./pgvector.js";
+import {
+  SOURCE_CLIPS_BUCKET,
+  clipStorageRef,
+  clipStorageKey,
+  libraryKey,
+  contentTypeFor,
+  uploadClip,
+  uploadLibrary,
+  uploadLibraryAssets,
+  type StorageClientLike,
+} from "./storage.js";
 import { WHISPER_MODEL } from "./models.js";
 
 /* ----------------------------- transcribe ------------------------------ */
@@ -299,5 +310,101 @@ describe("pgvector", () => {
     };
     await upsertEmbeddings(client, []);
     expect(called).toBe(false);
+  });
+});
+
+/* ------------------------------ storage -------------------------------- */
+
+interface RecordedUpload {
+  bucket: string;
+  path: string;
+  contentType?: string;
+  upsert?: boolean;
+}
+
+/** Fake Storage client that records every upload call. */
+function fakeStorage(error: { message: string } | null = null): {
+  client: StorageClientLike;
+  uploads: RecordedUpload[];
+} {
+  const uploads: RecordedUpload[] = [];
+  const client: StorageClientLike = {
+    from: (bucket) => ({
+      async upload(path, _body, options) {
+        uploads.push({ bucket, path, contentType: options?.contentType, upsert: options?.upsert });
+        return { error };
+      },
+    }),
+  };
+  return { client, uploads };
+}
+
+describe("storage helpers", () => {
+  it("builds storage refs and keys", () => {
+    expect(clipStorageRef("proj", "a.mov")).toBe("storage://proj/a.mov");
+    expect(clipStorageKey("proj", "a.mov")).toBe("proj/a.mov");
+    expect(libraryKey("proj")).toBe("proj/clips.json");
+  });
+
+  it("maps content types case-insensitively", () => {
+    expect(contentTypeFor("clip.mp4")).toBe("video/mp4");
+    expect(contentTypeFor("CLIP.MOV")).toBe("video/quicktime");
+    expect(contentTypeFor("clip.webm")).toBe("video/webm");
+    expect(contentTypeFor("clip.unknown")).toBe("application/octet-stream");
+  });
+
+  it("names the source-clips bucket", () => {
+    expect(SOURCE_CLIPS_BUCKET).toBe("source-clips");
+  });
+});
+
+describe("storage upload", () => {
+  it("uploads a clip to <project>/<src> with content type and upsert", async () => {
+    const { client, uploads } = fakeStorage();
+    await uploadClip(client, "source-clips", "proj", "a.mov", new Uint8Array([1, 2]));
+    expect(uploads).toEqual([
+      { bucket: "source-clips", path: "proj/a.mov", contentType: "video/quicktime", upsert: true },
+    ]);
+  });
+
+  it("throws when a clip upload reports an error", async () => {
+    const { client } = fakeStorage({ message: "boom" });
+    await expect(
+      uploadClip(client, "source-clips", "proj", "a.mov", new Uint8Array([1])),
+    ).rejects.toThrow(/source-clip upload failed \(a\.mov\): boom/);
+  });
+
+  it("uploads the manifest as JSON with upsert", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [partFixture({ id: "c01", src: "a.mov" })]);
+    await uploadLibrary(client, "source-clips", "proj", lib);
+    expect(uploads).toEqual([
+      {
+        bucket: "source-clips",
+        path: "proj/clips.json",
+        contentType: "application/json",
+        upsert: true,
+      },
+    ]);
+  });
+});
+
+describe("uploadLibraryAssets", () => {
+  it("uploads clips then the manifest, rewriting src without mutating the input", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [
+      partFixture({ id: "c01", src: "a.mov" }),
+      partFixture({ id: "c02", src: "b.mp4" }),
+    ]);
+    const readClip = async (src: string) => new Uint8Array([src.length]);
+
+    const uploaded = await uploadLibraryAssets(client, "source-clips", "proj", lib, readClip);
+
+    expect(uploads.map((u) => u.path)).toEqual(["proj/a.mov", "proj/b.mp4", "proj/clips.json"]);
+    expect(uploaded.clips.map((c) => c.src)).toEqual([
+      "storage://proj/a.mov",
+      "storage://proj/b.mp4",
+    ]);
+    expect(lib.clips[0]!.src).toBe("a.mov");
   });
 });
