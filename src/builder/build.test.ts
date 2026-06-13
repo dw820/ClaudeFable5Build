@@ -98,6 +98,24 @@ describe("buildPrompt (pure)", () => {
     // Previous EDL is summarized for context.
     expect(prompt.user).toContain("c01");
   });
+
+  it("renders timed scene lines when a clip has more than one scene", () => {
+    const lib: ClipLibrary = ClipLibrarySchema.parse({
+      projectId: "p",
+      clips: [{
+        id: "vlog1", src: "v.mp4", start: 0, end: 30, duration: 30,
+        resolution: [1080, 1920], transcript: [], caption: "a vlog", tags: ["vlog"],
+        scenes: [
+          { t0: 0, t1: 9.5, caption: "unboxing on a desk", tags: ["product"] },
+          { t0: 9.5, t1: 30, caption: "walking outside", tags: ["outdoor"] },
+        ],
+      }],
+    });
+    const prompt = buildPrompt(ctx({ library: lib }));
+    expect(prompt.user).toContain("scenes:");
+    expect(prompt.user).toContain('0.0–9.5s: "unboxing on a desk"');
+    expect(prompt.user).toContain('9.5–30.0s: "walking outside"');
+  });
 });
 
 describe("makeBuildEdl", () => {
@@ -145,6 +163,18 @@ describe("makeBuildEdl", () => {
     const ids = new Set(library.clips.map((c) => c.id));
     expect(edl.segments.every((s) => ids.has(s.clipId))).toBe(true);
     expect(edl.segments.some((s) => s.clipId === "DOES_NOT_EXIST")).toBe(false);
+  });
+
+  it("forces lut to null even when the model emits a descriptive name", async () => {
+    // The model often invents a LUT name (e.g. "punchy-cool-contrast"), which the
+    // renderer would treat as a missing .cube file and fail. No .cube LUT files
+    // exist this increment, so the builder must null it.
+    const withLut: Edl = EdlSchema.parse(JSON.parse(goodEdlResponse()));
+    const response = JSON.stringify({ ...withLut, lut: "punchy-cool-contrast" });
+
+    const result = await makeBuildEdl(new FakeLlmClient([response]))(ctx());
+    const edl = EdlSchema.parse(result);
+    expect(edl.lut).toBe(null);
   });
 
   it("nudges an over-long EDL back within target tolerance", async () => {

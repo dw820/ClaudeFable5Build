@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Preprocess Pipeline — Visual Walkthrough</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #141925;
+    --panel-2: #1b2230;
+    --ink: #e6edf3;
+    --muted: #8b98a9;
+    --line: #2a3344;
+    --accent: #6ea8fe;
+    --green: #57d9a3;
+    --amber: #f5c451;
+    --pink: #f178b6;
+    --purple: #b692f6;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+  body { line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  h1 { font-size: 30px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 15px; margin: 0 0 8px; }
+  .lede { color: var(--muted); font-size: 14px; max-width: 760px; }
+  code, .mono { font-family: var(--mono); }
+  a { color: var(--accent); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 22px 0 8px; font-size: 12.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .d-tool { background: var(--accent); }
+  .d-out { background: var(--green); }
+  .d-off { background: var(--purple); }
+
+  /* Overview flow */
+  .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 26px 0 10px; }
+  .node {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; min-width: 120px; flex: 1;
+  }
+  .node .k { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .node .v { font-weight: 600; font-size: 14px; margin-top: 2px; }
+  .node .t { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .arrow { align-self: center; color: var(--muted); padding: 0 8px; font-size: 18px; }
+
+  section { margin-top: 40px; }
+  .step-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .num {
+    font-family: var(--mono); font-size: 13px; color: var(--bg); background: var(--accent);
+    width: 26px; height: 26px; border-radius: 7px; display: inline-grid; place-items: center;
+    font-weight: 700; flex: none; align-self: center;
+  }
+  .num.off { background: var(--purple); }
+  h2 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+  .where { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 4px 0 14px 38px; }
+  .desc { margin: 0 0 16px 38px; font-size: 14px; color: #c7d1de; max-width: 780px; }
+  .desc b { color: var(--ink); }
+
+  .io { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; margin-left: 38px; }
+  @media (max-width: 720px) { .io { grid-template-columns: 1fr; } .io .mid { display: none; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  }
+  .card .cap {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;
+  }
+  .card.in .cap { color: var(--muted); }
+  .card.out .cap { color: var(--green); }
+  .pill { font-family: var(--mono); font-size: 10.5px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--line); color: var(--accent); text-transform: none; letter-spacing: 0; }
+  .pill.green { color: var(--green); }
+  pre { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.55; overflow-x: auto; color: #d7e0ea; }
+  .mid { align-self: center; color: var(--muted); font-size: 22px; text-align: center; }
+  .mid small { display: block; font-size: 10px; font-family: var(--mono); color: var(--muted); margin-top: 2px; }
+
+  /* token coloring */
+  .tk { color: var(--ink); }
+  .ts { color: var(--green); }       /* string */
+  .tn { color: var(--amber); }       /* number */
+  .tc { color: var(--muted); font-style: italic; } /* comment */
+  .tkey { color: var(--accent); }    /* key */
+
+  .fanout { margin: 18px 0 6px 38px; background: var(--panel-2); border: 1px dashed var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #c7d1de; }
+  .fanout b { color: var(--ink); }
+  .files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .file { font-family: var(--mono); font-size: 11.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; color: var(--muted); }
+  .file b { color: var(--ink); font-weight: 600; }
+
+  .note { margin: 14px 0 0 38px; font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--line); padding-left: 12px; max-width: 760px; }
+  .note b { color: var(--amber); }
+
+  .divider { height: 1px; background: var(--line); margin: 40px 0; border: 0; }
+  .offbar { display: inline-block; font-size: 11px; color: var(--purple); border: 1px solid var(--purple); border-radius: 20px; padding: 2px 10px; margin-left: 38px; }
+
+  footer { margin-top: 56px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 18px; }
+  footer code { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>The Preprocess Pipeline</h1>
+  <p class="sub">Offline producer of <code>clips.json</code> — turns a folder of raw videos into a searchable, validated clip library.</p>
+  <p class="lede">
+    Preprocess runs <b>once, offline</b>, before the editing agent ever wakes up. It walks a media directory and, for
+    <b>each clip in parallel</b>, extracts three things — what's said (transcript), what's shown (caption + tags), and the
+    container facts (duration + resolution). Those parts are assembled into one validated <code>ClipLibrary</code>, uploaded to
+    Supabase Storage, and written to <code>clips.json</code>. Everything below uses a real example: a <code>beach-trip</code> project.
+  </p>
+
+  <div class="legend">
+    <span><i class="dot d-tool"></i> external tool / model</span>
+    <span><i class="dot d-out"></i> data the step emits</span>
+    <span><i class="dot d-off"></i> off the demo path (wired but optional)</span>
+  </div>
+
+  <!-- OVERVIEW FLOW -->
+  <div class="flow">
+    <div class="node">
+      <div class="k">Input</div><div class="v">media/ dir</div><div class="t">*.mp4 *.mov …</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <div class="k">Per clip ×N</div><div class="v">3 steps</div><div class="t">whisper · VLM · ffprobe</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <div class="k">Join</div><div class="v">assemble</div><div class="t">ClipLibrarySchema.parse</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <div class="k">Persist</div><div class="v">upload</div><div class="t">source-clips bucket</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <div class="k">Output</div><div class="v">clips.json</div><div class="t">N validated clips</div>
+    </div>
+  </div>
+
+  <!-- STEP 0 -->
+  <section>
+    <div class="step-head"><span class="num">0</span><h2>Discover the clips</h2></div>
+    <div class="where">cli.ts · runDirectory()</div>
+    <p class="desc">
+      Read the media directory, keep only files with a video extension (<code>.mp4 .mov .m4v .webm .mkv</code>), and sort them
+      for a stable order. Empty directory → hard error (nothing to do). Each file id is its basename, sanitized.
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — directory listing <span class="pill">readdir</span></div>
+<pre><span class="tc">media/</span>
+  wipeout.mp4
+  sunset.mp4
+  paddle.mp4
+  notes.txt        <span class="tc">← skipped (not video)</span>
+  campfire.mov
+  …</pre>
+      </div>
+      <div class="mid">→<small>filter + sort</small></div>
+      <div class="card out">
+        <div class="cap">Output — clip work-list <span class="pill green">string[]</span></div>
+<pre>[
+  <span class="ts">"wipeout.mp4"</span>,  <span class="tc">// id: "wipeout"</span>
+  <span class="ts">"sunset.mp4"</span>,   <span class="tc">// id: "sunset"</span>
+  <span class="ts">"paddle.mp4"</span>,
+  <span class="ts">"campfire.mov"</span>,
+  …
+]</pre>
+      </div>
+    </div>
+    <div class="fanout">
+      <b>Fan-out:</b> every file below runs through Steps 1–3 <b>concurrently</b> via <code>Promise.all</code>.
+      We deep-dive a single clip — <span class="file"><b>wipeout.mp4</b></span> — then show the whole library at the end.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- STEP 1 -->
+  <section>
+    <div class="step-head"><span class="num">1</span><h2>Transcribe — what is said</h2></div>
+    <div class="where">transcribe.ts · transcribeClip()  →  whisper on Replicate</div>
+    <p class="desc">
+      The clip's audio is sent to <b>OpenAI Whisper</b> (via Replicate) asking for <b>word-level timestamps</b>. The raw response
+      is normalized by the pure <code>parseWhisperWords()</code> into a flat list of <code>{ word, t0, t1 }</code> tokens.
+      A clip with no decodable audio (b-roll, silent screen-capture) degrades gracefully to <code>[]</code> — it does not fail the batch.
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — request <span class="pill">openai/whisper</span></div>
+<pre>{
+  <span class="tkey">audio</span>: <span class="tc">&lt;wipeout.mp4 bytes&gt;</span>,
+  <span class="tkey">language</span>: <span class="ts">"auto"</span>,
+  <span class="tkey">timestamp</span>: <span class="ts">"word"</span>,
+  <span class="tkey">word_timestamps</span>: <span class="tk">true</span>
+}</pre>
+      </div>
+      <div class="mid">→<small>parseWhisperWords</small></div>
+      <div class="card out">
+        <div class="cap">Output — TranscriptWord[] <span class="pill green">{word,t0,t1}</span></div>
+<pre>[
+  { <span class="tkey">word</span>: <span class="ts">"watch"</span>, <span class="tkey">t0</span>: <span class="tn">0.2</span>, <span class="tkey">t1</span>: <span class="tn">0.5</span> },
+  { <span class="tkey">word</span>: <span class="ts">"this"</span>,  <span class="tkey">t0</span>: <span class="tn">0.5</span>, <span class="tkey">t1</span>: <span class="tn">0.8</span> }
+]
+
+<span class="tc">// silent clip (e.g. sunset.mp4) → []</span></pre>
+      </div>
+    </div>
+    <div class="note">
+      <b>Why timestamps matter:</b> downstream the agent uses <code>t0/t1</code> to place burned-in captions in sync with speech.
+      Whisper output shape varies by build (<code>chunks</code> / <code>segments</code> / <code>words</code>); the parser accepts all three.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- STEP 2 -->
+  <section>
+    <div class="step-head"><span class="num">2</span><h2>Understand frames — what is shown</h2></div>
+    <div class="where">frameUnderstand.ts · understandFrames()  →  ffmpeg + LLaVA on Replicate</div>
+    <p class="desc">
+      <code>ffmpeg</code> samples a few evenly-spaced JPEG frames; the middle (representative) frame is sent to a
+      <b>vision-language model (LLaVA-13B)</b> prompted to return one vivid caption plus 3–6 short content tags as strict JSON.
+      <code>parseVlmResponse()</code> tolerates loose prose too — a non-conforming model still yields a usable caption (tags empty).
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — frames + prompt <span class="pill">llava-13b</span></div>
+<pre>{
+  <span class="tkey">image</span>: <span class="ts">"data:image/jpeg;base64,/9j…"</span>,
+  <span class="tkey">prompt</span>: <span class="ts">"Describe this clip in one</span>
+<span class="ts">    vivid sentence… then 3-6 tags.</span>
+<span class="ts">    Respond as strict JSON."</span>
+}</pre>
+      </div>
+      <div class="mid">→<small>parseVlmResponse</small></div>
+      <div class="card out">
+        <div class="cap">Output — caption + tags <span class="pill green">{caption,tags}</span></div>
+<pre>{
+  <span class="tkey">caption</span>: <span class="ts">"a surfer paddles hard and</span>
+<span class="ts">     wipes out on a breaking wave"</span>,
+  <span class="tkey">tags</span>: [<span class="ts">"action"</span>, <span class="ts">"hook"</span>,
+          <span class="ts">"ocean"</span>, <span class="ts">"wipeout"</span>]
+}</pre>
+      </div>
+    </div>
+    <div class="note">
+      Tags are normalized — lowercased, trimmed, de-duped, capped at 8. The caption is also what gets embedded for
+      semantic search in Step&nbsp;5.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- STEP 3 -->
+  <section>
+    <div class="step-head"><span class="num">3</span><h2>Probe — the container facts</h2></div>
+    <div class="where">cli.ts · probeClip()  →  ffprobe</div>
+    <p class="desc">
+      <code>ffprobe</code> reads duration and the video stream's width/height. These become the clip's <code>duration</code> and
+      <code>resolution</code>. A non-positive duration is treated as a probe failure and fails loud — a zero-length "clip" is never
+      allowed into the library.
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — ffprobe query <span class="pill">ffprobe -of json</span></div>
+<pre><span class="tc">-show_entries
+  stream=width,height
+  :format=duration
+wipeout.mp4</span></pre>
+      </div>
+      <div class="mid">→<small>parse JSON</small></div>
+      <div class="card out">
+        <div class="cap">Output — ClipMeta <span class="pill green">{durationS,w,h}</span></div>
+<pre>{
+  <span class="tkey">durationS</span>: <span class="tn">12</span>,
+  <span class="tkey">width</span>:     <span class="tn">1080</span>,
+  <span class="tkey">height</span>:    <span class="tn">1920</span>
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- STEP 4 -->
+  <section>
+    <div class="step-head"><span class="num">4</span><h2>Assemble &amp; validate — join the parts</h2></div>
+    <div class="where">assemble.ts · buildClip() → assembleLibrary() → ClipLibrarySchema.parse()</div>
+    <p class="desc">
+      The three parts for each clip are merged into one <code>Clip</code> (the whole source clip is one selectable unit, so
+      <code>start = 0</code>, <code>end = duration</code>). All clips combine into a <code>ClipLibrary</code> that is
+      <b>validated by a Zod schema</b> — this is the gate. A malformed clip (zero dimension, out-of-spec transcript) is caught
+      <i>here</i>, not three modules downstream in the editor.
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — the 3 parts for one clip</div>
+<pre><span class="tc">transcript ┐</span>
+<span class="tc">caption+tags ┼─ buildClip("wipeout")</span>
+<span class="tc">meta ┘</span></pre>
+      </div>
+      <div class="mid">→<small>buildClip</small></div>
+      <div class="card out">
+        <div class="cap">Output — one validated Clip <span class="pill green">Clip</span></div>
+<pre>{
+  <span class="tkey">id</span>: <span class="ts">"wipeout"</span>,
+  <span class="tkey">src</span>: <span class="ts">"wipeout.mp4"</span>,
+  <span class="tkey">start</span>: <span class="tn">0</span>, <span class="tkey">end</span>: <span class="tn">12</span>, <span class="tkey">duration</span>: <span class="tn">12</span>,
+  <span class="tkey">resolution</span>: [<span class="tn">1080</span>, <span class="tn">1920</span>],
+  <span class="tkey">transcript</span>: [{ <span class="tkey">word</span>:<span class="ts">"watch"</span>,<span class="tkey">t0</span>:<span class="tn">0.2</span>,<span class="tkey">t1</span>:<span class="tn">0.5</span> }, …],
+  <span class="tkey">caption</span>: <span class="ts">"a surfer paddles hard…"</span>,
+  <span class="tkey">tags</span>: [<span class="ts">"action"</span>,<span class="ts">"hook"</span>,<span class="ts">"ocean"</span>,<span class="ts">"wipeout"</span>]
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- STEP 5 -->
+  <section>
+    <div class="step-head"><span class="num">5</span><h2>Upload to Storage</h2></div>
+    <div class="where">storage.ts · uploadLibraryAssets()  →  Supabase Storage (source-clips bucket)</div>
+    <p class="desc">
+      When <code>SUPABASE_URL</code> + <code>SUPABASE_SERVICE_ROLE_KEY</code> are set, every clip's bytes are uploaded first, then
+      the manifest is uploaded <b>last</b> — so a published <code>clips.json</code> can never reference a clip that failed to upload.
+      Each clip's <code>src</code> is rewritten to a <code>storage://</code> ref. (No Supabase env → pure-local dev, <code>src</code> stays a relative path.)
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Upload order <span class="pill">bucket: source-clips</span></div>
+<pre><span class="tc">// clips first…</span>
+beach-trip/wipeout.mp4   <span class="tc">video/mp4</span>
+beach-trip/sunset.mp4    <span class="tc">video/mp4</span>
+beach-trip/campfire.mov  <span class="tc">video/quicktime</span>
+…
+<span class="tc">// …manifest LAST</span>
+beach-trip/clips.json    <span class="tc">application/json</span></pre>
+      </div>
+      <div class="mid">→<small>src rewrite</small></div>
+      <div class="card out">
+        <div class="cap">Output — rewritten refs <span class="pill green">storage://</span></div>
+<pre><span class="tkey">src</span>: <span class="ts">"wipeout.mp4"</span>
+   ↓
+<span class="tkey">src</span>: <span class="ts">"storage://beach-trip/wipeout.mp4"</span>
+
+<span class="tc">// the agent worker later downloads
+// these with the service-role key</span></pre>
+      </div>
+    </div>
+    <div class="note">
+      <b>Asset model:</b> Supabase Storage is the source of truth; the agent's Daytona disk is just a cache. Preprocess uploads,
+      the worker downloads-and-caches on demand.
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- OFF PATH -->
+  <section>
+    <span class="offbar">OFF the demo path — wired &amp; tested, runs only when enabled</span>
+    <div class="step-head" style="margin-top:14px;"><span class="num off">★</span><h2>Embed &amp; index for semantic search</h2></div>
+    <div class="where">embed.ts (all-mpnet-base-v2) → pgvector.ts → Supabase clip_embeddings table</div>
+    <p class="desc">
+      Each clip's caption is embedded into a vector and upserted to a Postgres <code>pgvector</code> table, keyed on
+      <code>clip_id</code> so re-running preprocess is idempotent. This powers later "find me clips like X" retrieval. It never
+      touches the <code>ClipLibrary</code> contract, so it stays off the critical path.
+    </p>
+    <div class="io">
+      <div class="card in">
+        <div class="cap">Input — caption text <span class="pill">embedText</span></div>
+<pre>{ <span class="tkey">text</span>: <span class="ts">"a surfer paddles hard and</span>
+<span class="ts">          wipes out on a breaking wave"</span> }</pre>
+      </div>
+      <div class="mid">→<small>upsert</small></div>
+      <div class="card out">
+        <div class="cap">Output — pgvector row <span class="pill green">clip_embeddings</span></div>
+<pre>{
+  <span class="tkey">clip_id</span>:    <span class="ts">"wipeout"</span>,
+  <span class="tkey">project_id</span>: <span class="ts">"beach-trip"</span>,
+  <span class="tkey">caption</span>:    <span class="ts">"a surfer paddles hard…"</span>,
+  <span class="tkey">embedding</span>:  [<span class="tn">0.013</span>, <span class="tn">-0.072</span>, <span class="tn">0.041</span>, …768]
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- FINAL -->
+  <section>
+    <div class="step-head"><span class="num" style="background:var(--green);">✓</span><h2>The result — clips.json</h2></div>
+    <div class="where">N source videos in → 1 validated library out</div>
+    <p class="desc">
+      For the <code>beach-trip</code> project, 10 source clips become 10 validated entries. This is the single artifact the editing
+      agent reads to plan a cut. (Truncated to 3 of 10 below.)
+    </p>
+    <div class="fanout" style="margin-left:38px;">
+      <b>Per-clip steps ran in parallel:</b>
+      <div class="files">
+        <span class="file"><b>wipeout</b> · action·hook·ocean</span>
+        <span class="file"><b>sunset</b> · b-roll·golden-hour</span>
+        <span class="file"><b>paddle</b> · group·ocean</span>
+        <span class="file"><b>splash</b> · slowmo·transition</span>
+        <span class="file"><b>laugh</b> · reaction·people</span>
+        <span class="file"><b>drone</b> · b-roll·establishing</span>
+        <span class="file"><b>board</b> · detail·prep</span>
+        <span class="file"><b>run</b> · action·energy</span>
+        <span class="file"><b>van</b> · opener·lifestyle</span>
+        <span class="file"><b>campfire</b> · dusk·closer</span>
+      </div>
+    </div>
+    <div class="card out" style="margin:16px 0 0 38px;">
+      <div class="cap">clips.json <span class="pill green">ClipLibrary — validated</span></div>
+<pre>{
+  <span class="tkey">projectId</span>: <span class="ts">"beach-trip"</span>,
+  <span class="tkey">clips</span>: [
+    {
+      <span class="tkey">id</span>: <span class="ts">"wipeout"</span>, <span class="tkey">src</span>: <span class="ts">"storage://beach-trip/wipeout.mp4"</span>,
+      <span class="tkey">start</span>: <span class="tn">0</span>, <span class="tkey">end</span>: <span class="tn">12</span>, <span class="tkey">duration</span>: <span class="tn">12</span>, <span class="tkey">resolution</span>: [<span class="tn">1080</span>, <span class="tn">1920</span>],
+      <span class="tkey">transcript</span>: [{ <span class="tkey">word</span>: <span class="ts">"watch"</span>, <span class="tkey">t0</span>: <span class="tn">0.2</span>, <span class="tkey">t1</span>: <span class="tn">0.5</span> }, { <span class="tkey">word</span>: <span class="ts">"this"</span>, <span class="tkey">t0</span>: <span class="tn">0.5</span>, <span class="tkey">t1</span>: <span class="tn">0.8</span> }],
+      <span class="tkey">caption</span>: <span class="ts">"a surfer paddles hard and wipes out on a breaking wave"</span>,
+      <span class="tkey">tags</span>: [<span class="ts">"action"</span>, <span class="ts">"hook"</span>, <span class="ts">"ocean"</span>, <span class="ts">"wipeout"</span>]
+    },
+    {
+      <span class="tkey">id</span>: <span class="ts">"sunset"</span>, <span class="tkey">src</span>: <span class="ts">"storage://beach-trip/sunset.mp4"</span>,
+      <span class="tkey">start</span>: <span class="tn">0</span>, <span class="tkey">end</span>: <span class="tn">18</span>, <span class="tkey">duration</span>: <span class="tn">18</span>, <span class="tkey">resolution</span>: [<span class="tn">1080</span>, <span class="tn">1920</span>],
+      <span class="tkey">transcript</span>: [],                       <span class="tc">// silent b-roll → empty, and that's valid</span>
+      <span class="tkey">caption</span>: <span class="ts">"golden-hour sun sinking over calm water, warm orange sky"</span>,
+      <span class="tkey">tags</span>: [<span class="ts">"b-roll"</span>, <span class="ts">"golden-hour"</span>, <span class="ts">"calm"</span>]
+    },
+    {
+      <span class="tkey">id</span>: <span class="ts">"campfire"</span>, <span class="tkey">src</span>: <span class="ts">"storage://beach-trip/campfire.mov"</span>,
+      <span class="tkey">start</span>: <span class="tn">0</span>, <span class="tkey">end</span>: <span class="tn">14</span>, <span class="tkey">duration</span>: <span class="tn">14</span>, <span class="tkey">resolution</span>: [<span class="tn">1080</span>, <span class="tn">1920</span>],
+      <span class="tkey">transcript</span>: [],
+      <span class="tkey">caption</span>: <span class="ts">"beach campfire at dusk, sparks rising, friends silhouetted"</span>,
+      <span class="tkey">tags</span>: [<span class="ts">"b-roll"</span>, <span class="ts">"dusk"</span>, <span class="ts">"closer"</span>]
+    }
+    <span class="tc">// … 7 more</span>
+  ]
+}</pre>
+    </div>
+  </section>
+
+  <footer>
+    Source modules: <code>src/preprocess/</code> — <code>cli.ts</code> (orchestration), <code>transcribe.ts</code>,
+    <code>frameUnderstand.ts</code>, <code>assemble.ts</code>, <code>storage.ts</code>, <code>embed.ts</code> + <code>pgvector.ts</code> (off-path).
+    Example data adapted from <code>src/__fixtures__/sample-clips.json</code>. Run it: <code>tsx src/preprocess/cli.ts ./media</code>.
+  </footer>
+
+</div>
+</body>
+</html>

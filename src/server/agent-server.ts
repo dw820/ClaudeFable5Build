@@ -239,18 +239,32 @@ async function defaultRunSession(
 ): Promise<LoopResult> {
   const { makeRealQuery, makeRealBuildServer } = await import("../agent/sdk.js");
   const real = process.env.AGENT_TOOLS === "real";
+
+  let toolImpls = makeStubToolImpls();
+  let library = input.library;
+
   if (real) {
-    // Real tool impls (ffmpeg/Remotion/verifier) are out of scope for this milestone.
-    throw new Error("AGENT_TOOLS=real not implemented yet — set AGENT_TOOLS=stub");
+    const { AnthropicClient } = await import("../llm/client.js");
+    const { loadClipLibrary } = await import("../agent/realLibrary.js");
+    const { makeRealToolImpls } = await import("../agent/realTools.js");
+    // Real mode renders from the fixture library, not the stub SAMPLE_LIBRARY.
+    library = await loadClipLibrary();
+    toolImpls = makeRealToolImpls({
+      llm: new AnthropicClient(),
+      library,
+      brief: input.brief,
+      rubric: input.rubric,
+    });
   }
+
   return runAgentSession(
     { brief: input.brief },
     {
       query: await makeRealQuery(),
       buildServer: await makeRealBuildServer(),
-      toolImpls: makeStubToolImpls(),
+      toolImpls,
       rubric: input.rubric,
-      library: input.library,
+      library,
       emit,
     },
   );

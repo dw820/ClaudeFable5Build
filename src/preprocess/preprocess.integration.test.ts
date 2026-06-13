@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ClipLibrarySchema } from "../loop/types.js";
 import { makeReplicateRunner } from "./replicateClient.js";
-import { ffmpegFrameSampler, type ExecFn } from "./frameUnderstand.js";
+import { type ExecFn } from "./frameUnderstand.js";
 import { preprocessClip } from "./cli.js";
 import { assembleLibrary, type ClipMeta } from "./assemble.js";
 import {
@@ -88,21 +88,28 @@ describe("preprocess integration", () => {
         );
       }
       const runner = makeReplicateRunner();
-      const sampler = ffmpegFrameSampler(execBinary);
+      const execText: ExecFn = (cmd, args) =>
+        new Promise((resolve, reject) => {
+          const child = spawn(cmd, args);
+          const out: Buffer[] = [];
+          const err: Buffer[] = [];
+          child.stdout.on("data", (d: Buffer) => out.push(d));
+          child.stderr.on("data", (d: Buffer) => err.push(d));
+          child.on("error", reject);
+          child.on("close", () =>
+            resolve({ stdout: Buffer.concat(out).toString("binary"), stderr: Buffer.concat(err).toString("utf8") }),
+          );
+        });
       const mediaDir = join(here, "..", "__fixtures__");
 
-      const parts = await preprocessClip(
-        runner,
-        sampler,
-        probeClip,
-        mediaDir,
-        SAMPLE,
-      );
+      const parts = await preprocessClip(runner, execBinary, execText, probeClip, mediaDir, SAMPLE);
       const library = assembleLibrary("integration", [parts]);
 
       expect(() => ClipLibrarySchema.parse(library)).not.toThrow();
       expect(library.clips[0]!.duration).toBeGreaterThan(0);
       expect(library.clips[0]!.resolution[0]).toBeGreaterThan(0);
+      expect(Array.isArray(library.clips[0]!.scenes)).toBe(true);
+      expect(library.clips[0]!.scenes!.length).toBeGreaterThan(0);
 
       // Round-trip through clips.json on disk.
       const dir = await mkdtemp(join(tmpdir(), "preprocess-"));

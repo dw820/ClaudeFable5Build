@@ -132,7 +132,11 @@ function nudgeToTarget(edl: Edl, library: ClipLibrary): Edl {
 function postFilter(edl: Edl, library: ClipLibrary): Edl {
   const ids = clipIdSet(library);
   const kept = dropUnknownClips(edl.segments, ids);
-  const filtered: Edl = { ...edl, segments: kept };
+  // Force lut to null: no color-grade .cube LUT files exist this increment, and
+  // the renderer feeds any non-null lut to ffmpeg's lut3d filter as a file path,
+  // so a model-invented name (e.g. "punchy-cool-contrast") would fail the render.
+  // nudgeToTarget returns { ...edl, segments } over this object, so null is kept.
+  const filtered: Edl = { ...edl, lut: null, segments: kept };
   // If filtering removed every segment, there is nothing to nudge — return as
   // is and let the controller bounce it (EdlSchema requires >= 1 segment).
   if (filtered.segments.length === 0) return filtered;

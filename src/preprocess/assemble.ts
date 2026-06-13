@@ -38,6 +38,7 @@ import {
   ClipLibrarySchema,
   type Clip,
   type ClipLibrary,
+  type Scene,
   type TranscriptWordSchema,
 } from "../loop/types.js";
 
@@ -61,6 +62,22 @@ export interface ClipParts {
   transcript: TranscriptWord[];
   caption: string;
   tags: string[];
+  /** Per-scene captions from understandScenes; absent/empty for single-scene clips. */
+  scenes?: Scene[];
+}
+
+/** Caption of the scene covering the clip's temporal midpoint (deterministic). */
+function captionAtMidpoint(scenes: Scene[], durationS: number): string {
+  const mid = durationS / 2;
+  const hit = scenes.find((s) => mid >= s.t0 && mid < s.t1) ?? scenes[0];
+  return hit ? hit.caption : "";
+}
+
+/** De-duped union of all scene tags, order-preserved, capped. */
+function unionTags(scenes: Scene[], max = 8): string[] {
+  const seen = new Set<string>();
+  for (const s of scenes) for (const t of s.tags) if (t !== "") seen.add(t);
+  return [...seen].slice(0, max);
 }
 
 /**
@@ -73,6 +90,8 @@ export function buildClip(parts: ClipParts): Clip {
   if (!(duration > 0)) {
     throw new Error(`clip "${parts.id}" has non-positive duration ${duration}`);
   }
+  const scenes = parts.scenes ?? [];
+  const hasScenes = scenes.length > 0;
   return {
     id: parts.id,
     src: parts.src,
@@ -81,8 +100,9 @@ export function buildClip(parts: ClipParts): Clip {
     duration,
     resolution: [parts.meta.width, parts.meta.height],
     transcript: parts.transcript,
-    caption: parts.caption,
-    tags: parts.tags,
+    caption: hasScenes ? captionAtMidpoint(scenes, duration) : parts.caption,
+    tags: hasScenes ? unionTags(scenes) : parts.tags,
+    ...(hasScenes ? { scenes } : {}),
   };
 }
 

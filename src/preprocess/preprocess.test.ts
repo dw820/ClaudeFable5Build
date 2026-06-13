@@ -6,7 +6,7 @@
  * upsert call shape.
  */
 import { describe, it, expect } from "vitest";
-import { ClipLibrarySchema } from "../loop/types.js";
+import { ClipLibrarySchema, ClipSchema, SceneSchema } from "../loop/types.js";
 import { FakeReplicateRunner } from "./replicateClient.js";
 import {
   parseWhisperWords,
@@ -18,8 +18,10 @@ import {
   vlmInput,
   VLM_PROMPT,
   understandFrames,
+  understandScenes,
   type FrameSampler,
 } from "./frameUnderstand.js";
+import type { ExecFn } from "./frameUnderstand.js";
 import { parseEmbedding, embedInput, embedText } from "./embed.js";
 import {
   buildClip,
@@ -44,6 +46,32 @@ import {
   type StorageClientLike,
 } from "./storage.js";
 import { WHISPER_MODEL } from "./models.js";
+
+/* ----------------------------- scene schema ----------------------------- */
+
+describe("scene schema", () => {
+  it("validates a Scene", () => {
+    const ok = SceneSchema.safeParse({ t0: 0, t1: 3, caption: "x", tags: ["a"] });
+    expect(ok.success).toBe(true);
+  });
+
+  it("accepts a Clip WITHOUT scenes (backward compatible)", () => {
+    const clip = {
+      id: "c01", src: "a.mp4", start: 0, end: 12, duration: 12,
+      resolution: [1080, 1920], transcript: [], caption: "x", tags: [],
+    };
+    expect(ClipSchema.safeParse(clip).success).toBe(true);
+  });
+
+  it("accepts a Clip WITH scenes", () => {
+    const clip = {
+      id: "c01", src: "a.mp4", start: 0, end: 12, duration: 12,
+      resolution: [1080, 1920], transcript: [], caption: "x", tags: [],
+      scenes: [{ t0: 0, t1: 6, caption: "first", tags: ["a"] }],
+    };
+    expect(ClipSchema.safeParse(clip).success).toBe(true);
+  });
+});
 
 /* ----------------------------- transcribe ------------------------------ */
 
@@ -251,6 +279,29 @@ describe("assemble", () => {
     expect(() => ClipLibrarySchema.parse(lib)).not.toThrow();
     expect(lib.clips[0]!.transcript).toEqual([]);
   });
+
+  it("attaches scenes and derives caption from the midpoint scene + union tags", () => {
+    const clip = buildClip(
+      partFixture({
+        caption: "", tags: [],
+        scenes: [
+          { t0: 0, t1: 4, caption: "intro on the beach", tags: ["intro", "ocean"] },
+          { t0: 4, t1: 12, caption: "the wipeout", tags: ["action", "ocean"] },
+        ],
+      }),
+    );
+    expect(clip.scenes).toHaveLength(2);
+    // midpoint of a 12s clip is 6s → falls in the second window (4–12)
+    expect(clip.caption).toBe("the wipeout");
+    expect(clip.tags).toEqual(["intro", "ocean", "action"]); // union, de-duped, order-preserved
+  });
+
+  it("falls back to parts.caption/tags when there are no scenes (single-frame path)", () => {
+    const clip = buildClip(partFixture({ caption: "single", tags: ["x"] }));
+    expect(clip.scenes).toBeUndefined();
+    expect(clip.caption).toBe("single");
+    expect(clip.tags).toEqual(["x"]);
+  });
 });
 
 /* ------------------------------ pgvector ------------------------------- */
@@ -447,5 +498,42 @@ describe("uploadLibraryAssets", () => {
       "proj/clips.json",
     ]);
     expect(uploaded.clips[0]!.src).toBe("storage://proj/clips/wipeout.mp4");
+  });
+});
+
+/* --------------------------- understandScenes --------------------------- */
+
+describe("understandScenes", () => {
+  // Minimal valid JPEG byte stream (SOI…EOI) so splitJpegs finds one frame.
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("binary");
+  const fakeExec: ExecFn = async () => ({ stdout: jpeg, stderr: "" });
+
+  it("captions each window from its midpoint frame", async () => {
+    const runner = new FakeReplicateRunner([
+      '{"caption":"first scene","tags":["a"]}',
+      '{"caption":"second scene","tags":["b"]}',
+    ]);
+    const scenes = await understandScenes(runner, fakeExec, "clip.mp4", [
+      { t0: 0, t1: 6 },
+      { t0: 6, t1: 12 },
+    ]);
+    expect(scenes).toEqual([
+      { t0: 0, t1: 6, caption: "first scene", tags: ["a"] },
+      { t0: 6, t1: 12, caption: "second scene", tags: ["b"] },
+    ]);
+    expect(runner.seenCalls).toHaveLength(2);
+  });
+
+  it("degrades a failing scene to an empty caption without dropping others", async () => {
+    const runner = new FakeReplicateRunner((_id, _input, call) => {
+      if (call === 0) throw new Error("VLM 500");
+      return '{"caption":"ok","tags":[]}';
+    });
+    const scenes = await understandScenes(runner, fakeExec, "clip.mp4", [
+      { t0: 0, t1: 6 },
+      { t0: 6, t1: 12 },
+    ]);
+    expect(scenes[0]).toEqual({ t0: 0, t1: 6, caption: "", tags: [] });
+    expect(scenes[1]).toEqual({ t0: 6, t1: 12, caption: "ok", tags: [] });
   });
 });
