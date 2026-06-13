@@ -6,7 +6,7 @@
  * upsert call shape.
  */
 import { describe, it, expect } from "vitest";
-import { ClipLibrarySchema } from "../loop/types.js";
+import { ClipLibrarySchema, ClipSchema, SceneSchema } from "../loop/types.js";
 import { FakeReplicateRunner } from "./replicateClient.js";
 import {
   parseWhisperWords,
@@ -44,6 +44,32 @@ import {
   type StorageClientLike,
 } from "./storage.js";
 import { WHISPER_MODEL } from "./models.js";
+
+/* ----------------------------- scene schema ----------------------------- */
+
+describe("scene schema", () => {
+  it("validates a Scene", () => {
+    const ok = SceneSchema.safeParse({ t0: 0, t1: 3, caption: "x", tags: ["a"] });
+    expect(ok.success).toBe(true);
+  });
+
+  it("accepts a Clip WITHOUT scenes (backward compatible)", () => {
+    const clip = {
+      id: "c01", src: "a.mp4", start: 0, end: 12, duration: 12,
+      resolution: [1080, 1920], transcript: [], caption: "x", tags: [],
+    };
+    expect(ClipSchema.safeParse(clip).success).toBe(true);
+  });
+
+  it("accepts a Clip WITH scenes", () => {
+    const clip = {
+      id: "c01", src: "a.mp4", start: 0, end: 12, duration: 12,
+      resolution: [1080, 1920], transcript: [], caption: "x", tags: [],
+      scenes: [{ t0: 0, t1: 6, caption: "first", tags: ["a"] }],
+    };
+    expect(ClipSchema.safeParse(clip).success).toBe(true);
+  });
+});
 
 /* ----------------------------- transcribe ------------------------------ */
 

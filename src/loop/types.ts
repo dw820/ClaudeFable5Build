@@ -17,6 +17,14 @@ export const TranscriptWordSchema = z.object({
 });
 export type TranscriptWord = z.infer<typeof TranscriptWordSchema>;
 
+export const SceneSchema = z.object({
+  t0: z.number().nonnegative(),
+  t1: z.number().nonnegative(),
+  caption: z.string(),
+  tags: z.array(z.string()),
+});
+export type Scene = z.infer<typeof SceneSchema>;
+
 export const ClipSchema = z.object({
   id: z.string(),
   src: z.string(),
@@ -27,6 +35,7 @@ export const ClipSchema = z.object({
   transcript: z.array(TranscriptWordSchema),
   caption: z.string(),
   tags: z.array(z.string()),
+  scenes: z.array(SceneSchema).optional(),
 });
 export type Clip = z.infer<typeof ClipSchema>;
 
