@@ -26,6 +26,14 @@ import type { ClipLibrary, Edl } from "../loop/types.js";
 /** Resolve the media root the same way across cut + tests. */
 export const mediaDir = (): string => process.env.MEDIA_DIR ?? "./media";
 
+/**
+ * Constant output frame rate. iPhone clips are variable-frame-rate with a 1/600
+ * timebase; without normalizing to CFR, strict x264 builds (e.g. Debian/Daytona)
+ * infer a near-microsecond framerate and reject the stream with
+ * "MB rate (...) > level limit". `fps=` per segment + `-r` on output pins 30fps.
+ */
+export const OUTPUT_FPS = 30;
+
 /** Output pixel dimensions per aspect (PRD: vertical-first, 1080-class). */
 export const ASPECT_DIMENSIONS = {
   "9:16": { w: 1080, h: 1920 },
@@ -77,6 +85,7 @@ export function buildFfmpegArgs(
     const steps = [
       `trim=start=${seg.in}:end=${seg.out}`,
       "setpts=PTS-STARTPTS",
+      `fps=${OUTPUT_FPS}`,
       `scale=${w}:${h}:force_original_aspect_ratio=decrease`,
       `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2`,
       "setsar=1",
@@ -134,6 +143,8 @@ export function buildFfmpegArgs(
     "ultrafast",
     "-pix_fmt",
     "yuv420p",
+    "-r",
+    String(OUTPUT_FPS),
     "-y",
     outputPath,
   );
