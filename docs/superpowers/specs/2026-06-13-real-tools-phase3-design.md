@@ -89,7 +89,10 @@ signature is `(BuildContext) => Promise<unknown>`. The bridge:
   empty), so the LLM composes only from what the agent chose;
 - fold the agent's `rationale` into `brief` (e.g. append `"\n\nEditor's note: <rationale>"`)
   so the builder knows the agent's intent;
-- track an `iteration` counter incremented per call;
+- pass a constant `iteration: 1` (every `build_edl` is a fresh build): the agent
+  owns self-correction and conveys it via `rationale`, so the builder's
+  controller-style revision block — which needs `previousFeedback`/`previousEdl`
+  we don't have — must never fire;
 - return the builder's `unknown` result unchanged — the `build_edl` tool validates it
   with `EdlSchema`, exactly as today.
 
