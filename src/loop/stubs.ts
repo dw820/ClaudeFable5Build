@@ -87,16 +87,24 @@ export interface StubOptions {
   emit?: LoopDeps["emit"];
   now?: LoopDeps["now"];
   spentTokens?: LoopDeps["spentTokens"];
+  /** Artificial delay (ms) per build/render/grade so a live demo run unfolds
+   *  visibly instead of all at once. Defaults to 0 (instant — tests unaffected). */
+  delayMs?: number;
 }
+
+const wait = (ms: number): Promise<void> =>
+  ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve();
 
 /** Build a set of injected deps for the loop controller. */
 export function makeStubDeps(opts: StubOptions = {}): LoopDeps {
   const script = opts.gradeScript ?? DEFAULT_GRADE_SCRIPT;
+  const delay = opts.delayMs ?? 0;
   let buildCalls = 0;
   let gradeCalls = 0;
 
   return {
     buildEdl: async (ctx) => {
+      await wait(delay);
       buildCalls += 1;
       if (opts.invalidEdlOn?.includes(ctx.iteration)) {
         return { edlId: "bad", segments: [] }; // fails EdlSchema (no aspect, empty segments)
@@ -104,6 +112,7 @@ export function makeStubDeps(opts: StubOptions = {}): LoopDeps {
       return validEdl(ctx.iteration, ctx.library);
     },
     render: async (edl: Edl): Promise<RenderResult> => {
+      await wait(delay);
       const iter = Number(edl.edlId.replace("edl-", "")) || buildCalls;
       if (opts.failRenderOn?.includes(iter)) {
         throw new Error(`ffmpeg exited non-zero on iteration ${iter}`);
@@ -115,6 +124,7 @@ export function makeStubDeps(opts: StubOptions = {}): LoopDeps {
       };
     },
     grade: async (render: RenderResult, rubric: Rubric): Promise<Grade> => {
+      await wait(delay);
       const idx = Math.min(gradeCalls, script.length - 1);
       gradeCalls += 1;
       const scores = script[idx]!;
