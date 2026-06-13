@@ -28,6 +28,11 @@ import {
   type ClipMeta,
   type ClipParts,
 } from "./assemble.js";
+import {
+  makeStorageClient,
+  uploadLibraryAssets,
+  SOURCE_CLIPS_BUCKET,
+} from "./storage.js";
 
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv"]);
 
@@ -158,7 +163,26 @@ export async function runDirectory(
     files.map((f) => preprocessClip(runner, sampler, probeClip, mediaDir, f)),
   );
 
-  const library = assembleLibrary(projectId, parts);
+  let library = assembleLibrary(projectId, parts);
+
+  // Upload to Storage when configured (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY).
+  // On upload, clip.src is rewritten to a storage:// ref; otherwise src stays a
+  // local relative path (pure-local dev still works).
+  const storage = makeStorageClient();
+  if (storage) {
+    library = await uploadLibraryAssets(
+      storage,
+      SOURCE_CLIPS_BUCKET,
+      projectId,
+      library,
+      (src) => readFile(join(mediaDir, src)).then((b) => new Uint8Array(b)),
+    );
+    // eslint-disable-next-line no-console
+    console.log(
+      `uploaded ${library.clips.length} clips + manifest → ${SOURCE_CLIPS_BUCKET}/${projectId}/`,
+    );
+  }
+
   await writeClipsJson(library, outPath);
   // eslint-disable-next-line no-console
   console.log(`wrote ${library.clips.length} clips → ${outPath}`);
