@@ -116,6 +116,39 @@ function formatClipLine(c: Clip): string {
   return base + scenes;
 }
 
+/** Transcript words whose midpoint falls in [t0, t1), joined into a quote. */
+function transcriptForWindow(words: Clip["transcript"], t0: number, t1: number): string {
+  return words
+    .filter((w) => {
+      const mid = (w.t0 + w.t1) / 2;
+      return mid >= t0 && mid < t1;
+    })
+    .map((w) => w.word)
+    .join(" ");
+}
+
+/**
+ * The full per-clip view the agent needs before choosing in/out points:
+ * dimensions, the scene-by-scene breakdown, and the transcript aligned to each
+ * scene window. With no scenes it falls back to the whole-clip transcript; with
+ * no transcript it says so rather than emitting an empty quote.
+ */
+export function formatClipInspection(c: Clip): string {
+  const [w, h] = c.resolution;
+  const head = `${c.id} — ${c.caption} [${c.tags.join(", ")}]\nduration: ${fmtS(c.duration)}s  resolution: ${w}x${h}`;
+  if (c.scenes && c.scenes.length > 0) {
+    const lines = c.scenes.map((s) => {
+      const tagStr = s.tags.length ? ` [${s.tags.join(", ")}]` : "";
+      const quote = transcriptForWindow(c.transcript, s.t0, s.t1);
+      const body = quote ? `      "${quote}"` : "      (no transcript)";
+      return `    ${fmtS(s.t0)}–${fmtS(s.t1)}s: ${s.caption}${tagStr}\n${body}`;
+    });
+    return `${head}\nscenes:\n${lines.join("\n")}`;
+  }
+  const all = c.transcript.map((x) => x.word).join(" ");
+  return `${head}\ntranscript: ${all || "(no transcript)"}`;
+}
+
 /**
  * Build the five tool specs, wired to the injected impls, the tracker (best-so-far),
  * and the event sink. `iteration` increments on each build_edl — the agent's
@@ -136,6 +169,22 @@ export function createAutocutTools(deps: AutocutToolsDeps): { specs: ToolSpec[];
         const clips = await impls.searchClips(String(args.query ?? ""), library);
         emit({ iteration, phase: "select", message: `search_clips → ${clips.length} candidates` });
         return text(clips.map((c) => formatClipLine(c)).join("\n"));
+      },
+    },
+    {
+      name: "inspect_clip",
+      description:
+        "Inspect one clip in depth: duration, resolution, its scene-by-scene breakdown, " +
+        "and the transcript aligned to each scene. Use this before choosing in/out timestamps " +
+        "for a clip whose captions or tags are not specific enough to cut from confidently.",
+      schema: { clipId: z.string() },
+      handler: async (args) => {
+        const clip = library.clips.find((c) => c.id === String(args.clipId));
+        if (!clip) {
+          return text(`UNKNOWN_CLIP: ${args.clipId}. Call search_clips to list available clip ids.`);
+        }
+        emit({ iteration, phase: "select", message: `inspect_clip ${clip.id}` });
+        return text(formatClipInspection(clip));
       },
     },
     {
