@@ -33,6 +33,16 @@ import {
   type PgvectorTable,
   type UpsertResult,
 } from "./pgvector.js";
+import {
+  clipStorageRef,
+  clipStorageKey,
+  libraryKey,
+  contentTypeFor,
+  uploadClip,
+  uploadLibrary,
+  uploadLibraryAssets,
+  type StorageClientLike,
+} from "./storage.js";
 import { WHISPER_MODEL } from "./models.js";
 
 /* ----------------------------- transcribe ------------------------------ */
@@ -56,6 +66,26 @@ describe("transcribe", () => {
       segments: [{ words: [{ word: "go", start: 1.0, end: 1.3 }] }],
     });
     expect(words).toEqual([{ word: "go", t0: 1.0, t1: 1.3 }]);
+  });
+
+  it("interpolates words from segment-level output (no per-word array)", () => {
+    // Base openai/whisper returns segments with text + a span but no words[].
+    const words = parseWhisperWords({
+      segments: [{ start: 0, end: 2, text: "hello there" }],
+    });
+    expect(words).toEqual([
+      { word: "hello", t0: 0, t1: 1 },
+      { word: "there", t0: 1, t1: 2 },
+    ]);
+  });
+
+  it("prefers nested words[] over the segment-span fallback", () => {
+    const words = parseWhisperWords({
+      segments: [
+        { start: 0, end: 2, text: "hi yo", words: [{ word: "hi", start: 0.1, end: 0.4 }] },
+      ],
+    });
+    expect(words).toEqual([{ word: "hi", t0: 0.1, t1: 0.4 }]);
   });
 
   it("parses flat words[] shape and clamps t1<t0", () => {
@@ -82,6 +112,22 @@ describe("transcribe", () => {
     expect(call.identifier).toBe(WHISPER_MODEL);
     expect(call.input).toEqual(whisperInput("media/a.mp4"));
     expect(call.input).toMatchObject({ audio: "media/a.mp4", timestamp: "word" });
+  });
+
+  it("degrades a no-audio clip to an empty transcript (does not throw)", async () => {
+    const runner = new FakeReplicateRunner(() => {
+      throw new Error(
+        "Prediction failed: Failed to load audio: ... Output file #0 does not contain any stream",
+      );
+    });
+    await expect(transcribeClip(runner, { audio: "silent.mp4" })).resolves.toEqual([]);
+  });
+
+  it("rethrows non-audio failures (auth, rate-limit, real model errors)", async () => {
+    const runner = new FakeReplicateRunner(() => {
+      throw new Error("401 Unauthorized");
+    });
+    await expect(transcribeClip(runner, { audio: "x.mp4" })).rejects.toThrow(/401/);
   });
 });
 
@@ -263,5 +309,143 @@ describe("pgvector", () => {
     };
     await upsertEmbeddings(client, []);
     expect(called).toBe(false);
+  });
+});
+
+/* ------------------------------ storage -------------------------------- */
+
+interface RecordedUpload {
+  bucket: string;
+  path: string;
+  body: ArrayBuffer | Uint8Array | Blob | string;
+  contentType?: string;
+  upsert?: boolean;
+}
+
+/** Fake Storage client that records every upload call (including the body). */
+function fakeStorage(error: { message: string } | null = null): {
+  client: StorageClientLike;
+  uploads: RecordedUpload[];
+} {
+  const uploads: RecordedUpload[] = [];
+  const client: StorageClientLike = {
+    from: (bucket) => ({
+      async upload(path, body, options) {
+        uploads.push({
+          bucket,
+          path,
+          body,
+          contentType: options?.contentType,
+          upsert: options?.upsert,
+        });
+        return { error };
+      },
+    }),
+  };
+  return { client, uploads };
+}
+
+describe("storage helpers", () => {
+  it("builds storage refs and keys", () => {
+    expect(clipStorageRef("proj", "a.mov")).toBe("storage://proj/a.mov");
+    expect(clipStorageKey("proj", "a.mov")).toBe("proj/a.mov");
+    expect(libraryKey("proj")).toBe("proj/clips.json");
+  });
+
+  it("maps content types case-insensitively", () => {
+    expect(contentTypeFor("clip.mp4")).toBe("video/mp4");
+    expect(contentTypeFor("CLIP.MOV")).toBe("video/quicktime");
+    expect(contentTypeFor("clip.webm")).toBe("video/webm");
+    expect(contentTypeFor("clip.unknown")).toBe("application/octet-stream");
+  });
+});
+
+describe("storage upload", () => {
+  it("uploads a clip to <project>/<src> with content type and upsert", async () => {
+    const { client, uploads } = fakeStorage();
+    await uploadClip(client, "source-clips", "proj", "a.mov", new Uint8Array([1, 2]));
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]).toMatchObject({
+      bucket: "source-clips",
+      path: "proj/a.mov",
+      contentType: "video/quicktime",
+      upsert: true,
+    });
+  });
+
+  it("throws when a clip upload reports an error", async () => {
+    const { client } = fakeStorage({ message: "boom" });
+    await expect(
+      uploadClip(client, "source-clips", "proj", "a.mov", new Uint8Array([1])),
+    ).rejects.toThrow(/source-clip upload failed \(a\.mov\): boom/);
+  });
+
+  it("uploads the manifest as JSON with upsert", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [partFixture({ id: "c01", src: "a.mov" })]);
+    await uploadLibrary(client, "source-clips", "proj", lib);
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]).toMatchObject({
+      bucket: "source-clips",
+      path: "proj/clips.json",
+      contentType: "application/json",
+      upsert: true,
+    });
+  });
+});
+
+describe("uploadLibraryAssets", () => {
+  it("uploads clips then the manifest, rewriting src without mutating the input", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [
+      partFixture({ id: "c01", src: "a.mov" }),
+      partFixture({ id: "c02", src: "b.mp4" }),
+    ]);
+    const readClip = async (src: string) => new Uint8Array([src.length]);
+
+    const uploaded = await uploadLibraryAssets(client, "source-clips", "proj", lib, readClip);
+
+    expect(uploads.map((u) => u.path)).toEqual(["proj/a.mov", "proj/b.mp4", "proj/clips.json"]);
+    expect(uploaded.clips.map((c) => c.src)).toEqual([
+      "storage://proj/a.mov",
+      "storage://proj/b.mp4",
+    ]);
+    expect(lib.clips[0]!.src).toBe("a.mov");
+  });
+
+  it("uploads a manifest body whose clips[].src are the rewritten storage refs", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [
+      partFixture({ id: "c01", src: "a.mov" }),
+      partFixture({ id: "c02", src: "b.mp4" }),
+    ]);
+    const readClip = async (src: string) => new Uint8Array([src.length]);
+
+    const uploaded = await uploadLibraryAssets(client, "source-clips", "proj", lib, readClip);
+
+    const manifestUpload = uploads.find((u) => u.path === "proj/clips.json");
+    expect(manifestUpload).toBeDefined();
+    expect(typeof manifestUpload!.body).toBe("string");
+    const parsed = JSON.parse(manifestUpload!.body as string) as { clips: { src: string }[] };
+    expect(parsed.clips.map((c) => c.src)).toEqual([
+      "storage://proj/a.mov",
+      "storage://proj/b.mp4",
+    ]);
+    // The persisted manifest matches the returned (rewritten) library.
+    expect(parsed.clips.map((c) => c.src)).toEqual(uploaded.clips.map((c) => c.src));
+  });
+
+  it("preserves nested src subpaths in the upload path and rewritten ref", async () => {
+    const { client, uploads } = fakeStorage();
+    const lib = assembleLibrary("proj", [partFixture({ id: "c01", src: "clips/wipeout.mp4" })]);
+    const readClip = async () => new Uint8Array([1]);
+
+    const uploaded = await uploadLibraryAssets(client, "source-clips", "proj", lib, readClip);
+
+    expect(uploads.map((u) => u.path)).toEqual([
+      "proj/clips/wipeout.mp4",
+      "proj/clips.json",
+    ]);
+    expect(uploaded.clips[0]!.src).toBe("storage://proj/clips/wipeout.mp4");
   });
 });

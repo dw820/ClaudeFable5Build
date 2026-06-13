@@ -42,6 +42,29 @@ function pushWord(
 }
 
 /**
+ * Fallback for segment-level whisper output that lacks a per-word array (base
+ * openai/whisper returns `segments[].text` with a span but no words[]): split
+ * the phrase into words and distribute timestamps evenly across the span.
+ * Timing is approximate, but enough for caption display — and far better than
+ * silently dropping the whole transcript.
+ */
+function pushSegmentWords(
+  out: TranscriptWord[],
+  text: unknown,
+  t0: unknown,
+  t1: unknown,
+): void {
+  const phrase = typeof text === "string" ? text.trim() : "";
+  const a = toTime(t0);
+  const b = toTime(t1);
+  if (phrase === "" || a === undefined || b === undefined) return;
+  const words = phrase.split(/\s+/);
+  const span = Math.max(0, Math.max(a, b) - a);
+  const per = words.length > 0 ? span / words.length : 0;
+  words.forEach((w, i) => pushWord(out, w, a + i * per, a + (i + 1) * per));
+}
+
+/**
  * PURE: normalize a whisper response into word-level transcript tokens.
  * Unknown / empty shapes return `[]` rather than throwing — a silent clip is a
  * valid clip, not an error.
@@ -59,13 +82,17 @@ export function parseWhisperWords(response: unknown): TranscriptWord[] {
     if (out.length > 0) return out;
   }
 
-  // Variant B: segments, each with a nested words[] (preferred) or a span.
+  // Variant B: segments, each with a nested words[] (preferred — WhisperX) or,
+  // failing that, a segment-level span we split into evenly-spaced words (base
+  // openai/whisper). Handle both so neither model silently drops the transcript.
   if (Array.isArray(r.segments)) {
     for (const seg of r.segments as Array<Record<string, unknown>>) {
-      if (Array.isArray(seg.words)) {
+      if (Array.isArray(seg.words) && seg.words.length > 0) {
         for (const w of seg.words as Array<Record<string, unknown>>) {
           pushWord(out, w.word ?? w.text, w.start ?? w.t0, w.end ?? w.t1);
         }
+      } else {
+        pushSegmentWords(out, seg.text, seg.start ?? seg.t0, seg.end ?? seg.t1);
       }
     }
     if (out.length > 0) return out;
@@ -85,13 +112,30 @@ export function parseWhisperWords(response: unknown): TranscriptWord[] {
 }
 
 export interface TranscribeOptions {
-  /** Replicate-accessible URL or file ref for the clip's audio/video. */
-  audio: string;
+  /**
+   * The clip's audio/video for whisper. Either a Replicate-accessible URL, or a
+   * Blob/File of the bytes — the Replicate SDK auto-uploads Blob/File inputs and
+   * substitutes the hosted URL. A bare local path string is NOT valid: Replicate
+   * rejects it with `input.audio: Does not match format 'uri'`.
+   */
+  audio: string | Blob;
   model?: `${string}/${string}` | `${string}/${string}:${string}`;
 }
 
+/**
+ * True only for a whisper failure caused by the clip having no decodable audio
+ * (e.g. a video-only file): whisper shells out to ffmpeg, which reports
+ * "Failed to load audio" / "does not contain any stream". A silent/audio-less
+ * clip is a valid clip (→ empty transcript), so we degrade these — but NOTHING
+ * else (auth, rate-limit, real model errors stay loud).
+ */
+export function isNoAudioError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /failed to load audio|does not contain any stream|no audio/i.test(msg);
+}
+
 /** Build the whisper request input (extracted so the test can assert it). */
-export function whisperInput(audio: string): object {
+export function whisperInput(audio: string | Blob): object {
   return {
     audio,
     // Ask for word-level timestamps regardless of model build naming.
@@ -106,8 +150,22 @@ export async function transcribeClip(
   runner: ReplicateRunner,
   opts: TranscribeOptions,
 ): Promise<TranscriptWord[]> {
-  const response = await runner.run(opts.model ?? WHISPER_MODEL, {
-    input: whisperInput(opts.audio),
-  });
+  let response: unknown;
+  try {
+    response = await runner.run(opts.model ?? WHISPER_MODEL, {
+      input: whisperInput(opts.audio),
+    });
+  } catch (err) {
+    // A clip with no decodable audio is valid (b-roll, silent screen-capture):
+    // degrade to an empty transcript instead of failing the whole batch. Any
+    // other failure is real and must propagate.
+    if (isNoAudioError(err)) {
+      const label = typeof opts.audio === "string" ? opts.audio : "clip";
+      // eslint-disable-next-line no-console
+      console.warn(`[transcribe] no decodable audio (${label}) — empty transcript`);
+      return [];
+    }
+    throw err;
+  }
   return parseWhisperWords(response);
 }

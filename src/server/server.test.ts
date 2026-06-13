@@ -18,8 +18,35 @@ import {
 } from "./runs.js";
 import { executeRun, type AgentClient } from "./agent-server.js";
 import { consult, styleDir } from "../memory/index.js";
-import { makeStubDeps } from "../loop/stubs.js";
+import { SAMPLE_LIBRARY, VIRAL_RUBRIC } from "../loop/stubs.js";
+import type { LoopResult } from "../loop/controller.js";
 import type { LoopEvent } from "../loop/types.js";
+
+/**
+ * A `runSession` stub matching the seam executeRun injects: emits a couple of
+ * events and returns a passing LoopResult. Signature mirrors ExecuteRunOptions.
+ */
+const passingRunSession = async (
+  _input: { brief: string; rubric: typeof VIRAL_RUBRIC; library: typeof SAMPLE_LIBRARY },
+  emit: (e: LoopEvent) => void,
+): Promise<LoopResult> => {
+  emit({ iteration: 1, phase: "render", message: "rendered", renderRef: "storage://renders/r1.mp4", ts: 0 });
+  emit({ iteration: 1, phase: "grade", message: "graded 5/5", ts: 0 });
+  return {
+    passed: true,
+    iterations: 1,
+    stopReason: "passed",
+    shipped: {
+      render: { renderId: "r1", output: "storage://renders/r1.mp4", usedFallback: false },
+      grade: {
+        renderId: "r1",
+        scores: { hook_strength: 8, pace_cut_density: 9, caption_legibility: 8, loopability: 8, on_style_trend_fit: 9 },
+        feedback: {},
+      },
+      iteration: 1,
+    },
+  };
+};
 
 /* ------------------------------- events -------------------------------- */
 
@@ -243,18 +270,17 @@ describe("executeRun", () => {
 
     await executeRun(client, run, {
       memoryDir,
-      // deterministic, instant deps (no delay) with the default weak→pass money-shot
-      makeDeps: (emit) => makeStubDeps({ emit, delayMs: 0 }),
+      // deterministic agent session that emits a couple of events and passes
+      runSession: passingRunSession,
       now: () => 777,
     });
 
-    // events streamed to the bus (consult note + loop events + ship)
+    // events streamed to the bus (consult note + session events)
     await Promise.resolve();
     const phases = events.map((e) => (e as { phase: string }).phase);
     expect(phases).toContain("memory"); // consult note
-    expect(phases).toContain("build");
+    expect(phases).toContain("render");
     expect(phases).toContain("grade");
-    expect(phases).toContain("ship");
 
     // run reached shipped with a render ref
     const last = statuses[statuses.length - 1]!;
@@ -294,7 +320,7 @@ describe("executeRun", () => {
     await executeRun(
       client,
       { id: "run-2", style: "Viral Short", brief: "b", status: "running" },
-      { memoryDir, makeDeps: (emit) => makeStubDeps({ emit, delayMs: 0 }), now: () => 1 },
+      { memoryDir, runSession: passingRunSession, now: () => 1 },
     );
 
     const consultEvent = events.find(
@@ -320,7 +346,7 @@ describe("executeRun", () => {
 
     await executeRun(client, { id: "run-3", style: "Viral Short", brief: "b", status: "running" }, {
       memoryDir,
-      makeDeps: (emit) => makeStubDeps({ emit, delayMs: 0 }),
+      runSession: passingRunSession,
       storage,
       readRender: async () => new Uint8Array([1, 2, 3]),
       now: () => 1,

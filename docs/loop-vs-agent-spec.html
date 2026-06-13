@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoCut — Deterministic loop → Autonomous agent (Option C)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9E5DD; --card:#FBFAF7; --sink:#F3F1EA; --ink:#22211D;
+    --muted:#6B6760; --faint:#A6A096; --hair:#D8D3C8;
+    --coral:#D64A43; --green:#2F8A4E; --red:#C0392B; --amber:#9A6B1E; --blue:#2F5D99;
+    --shadow:3px 4px 0 rgba(34,33,29,.07);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; line-height:1.5; padding:48px 32px 80px;
+  }
+  .wrap{max-width:1320px; margin:0 auto}
+  .micro{font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); font-weight:600}
+  h1{font-family:'Fraunces',serif; font-weight:500; font-size:36px; margin:8px 0 6px; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:15px; max-width:880px; margin:0 0 32px}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start}
+  @media(max-width:1040px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--card); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow); padding:22px 24px}
+  .panel h2{font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px; display:flex; align-items:center; gap:10px}
+  .panel .ph{font-size:12px; color:var(--muted); margin:0 0 18px}
+
+  .tag{font-size:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; padding:2px 9px; border-radius:20px}
+  .tag.before{color:var(--muted); background:rgba(107,103,96,.12)}
+  .tag.after{color:var(--blue); background:rgba(47,93,153,.12)}
+
+  /* flow nodes */
+  .flow{display:flex; flex-direction:column; align-items:stretch; gap:0}
+  .node{
+    border:1px solid var(--hair); border-radius:10px; padding:11px 14px; background:var(--sink);
+    position:relative;
+  }
+  .node .nk{font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; color:var(--faint); margin-bottom:3px}
+  .node .nv{font-size:13px; font-weight:600}
+  .node .nd{font-size:11.5px; color:var(--muted); margin-top:3px}
+  .node .nd code{font-size:11px; background:var(--card); padding:1px 5px; border-radius:4px; color:var(--ink)}
+
+  .node.start{background:var(--ink); color:#fff; text-align:center; border-color:var(--ink)}
+  .node.start .nv{font-size:13.5px}
+  .node.start .nd{color:#cfcabf}
+  .node.agent{border-left:3px solid var(--blue)}
+  .node.det{border-left:3px solid var(--ink)}
+  .node.verify{border-left:3px solid var(--green)}
+  .node.tool{border-left:3px solid var(--blue); background:var(--card)}
+  .node.tool .nk{color:var(--blue)}
+  .node.ship{background:#eaf3ed; border:1.5px solid var(--green)}
+  .node.ship .nv{color:var(--green)}
+
+  .decide{
+    align-self:center; background:var(--card); border:1.5px solid var(--amber);
+    color:var(--amber); border-radius:8px; padding:8px 15px; font-weight:600; font-size:12.5px;
+    text-align:center; position:relative;
+  }
+  .decide .q{font-size:11px; color:var(--muted); font-weight:500; margin-top:2px}
+
+  .conn{height:16px; width:2px; background:var(--hair); align-self:center; margin:0}
+  .conn.short{height:10px}
+  .lbl{align-self:center; font-size:11px; font-weight:600; padding:1px 9px; border-radius:20px; margin:5px 0}
+  .lbl.no{color:var(--red); background:rgba(192,57,43,.08)}
+  .lbl.yes{color:var(--green); background:rgba(47,138,78,.1)}
+  .lbl.cap{color:var(--amber); background:rgba(154,107,30,.1)}
+
+  /* who-owns-the-loop banner inside each column */
+  .owns{font-size:11.5px; font-weight:600; padding:7px 12px; border-radius:8px; margin:0 0 14px; text-align:center}
+  .owns.det{color:var(--ink); background:rgba(34,33,29,.06); border:1px dashed var(--ink)}
+  .owns.agent{color:var(--blue); background:rgba(47,93,153,.07); border:1px dashed var(--blue)}
+
+  /* autonomous container (the AFTER inner loop, owned by Claude) */
+  .auto{
+    border:1.5px dashed var(--blue); border-radius:11px; padding:12px; margin:0;
+    background:rgba(47,93,153,.035); position:relative;
+  }
+  .auto .autohdr{
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; color:var(--blue);
+    margin-bottom:9px; display:flex; align-items:center; gap:6px;
+  }
+  .auto .innerloop{
+    border:1px dashed var(--coral); border-radius:8px; padding:7px 11px; margin-top:9px;
+    background:rgba(214,74,67,.04); font-size:11.5px; color:var(--coral); font-weight:500;
+    display:flex; align-items:center; gap:8px;
+  }
+
+  /* the cap fence around the autonomous block */
+  .fence{
+    border:1.5px solid var(--amber); border-radius:13px; padding:13px; position:relative;
+    background:rgba(154,107,30,.03);
+  }
+  .fence .fencehdr{
+    position:absolute; top:-10px; left:14px; background:var(--card); padding:0 8px;
+    font-size:10px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:var(--amber);
+  }
+
+  .loopback{
+    border:1px dashed var(--coral); border-radius:9px; padding:8px 12px; margin:8px 0;
+    background:rgba(214,74,67,.04); font-size:11.5px; color:var(--coral); font-weight:500;
+    display:flex; align-items:center; gap:8px;
+  }
+  .loopback .arc{font-size:15px}
+
+  .emit{
+    display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600;
+    color:var(--green); background:rgba(47,138,78,.09); border:1px solid rgba(47,138,78,.25);
+    border-radius:20px; padding:2px 8px; margin-top:7px;
+  }
+  .watch{
+    display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:600;
+    color:var(--amber); background:rgba(154,107,30,.09); border:1px solid rgba(154,107,30,.28);
+    border-radius:20px; padding:2px 8px; margin-top:7px;
+  }
+
+  .branch{display:flex; gap:12px; margin-top:8px}
+  .branch > div{flex:1}
+
+  pre{
+    background:#1c1b17; color:#e8e4d8; border-radius:11px; padding:18px; margin:0;
+    font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.62; overflow-x:auto;
+  }
+  pre .c{color:#8f897a}
+  pre .k{color:#e08a7a}
+  pre .f{color:#cdbd87}
+  pre .s{color:#9fc08a}
+  pre .n{color:#d9a05b}
+  pre .cap{color:#e0b450; font-weight:600}
+  pre .b{color:#7fb0e0}
+
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin:16px 0 0}
+  .lchip{display:inline-flex; align-items:center; gap:7px; font-size:11.5px; color:var(--muted); font-weight:500}
+  .ld{width:11px; height:11px; border-radius:3px}
+
+  /* diff strip */
+  .diffgrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:18px}
+  @media(max-width:900px){.diffgrid{grid-template-columns:1fr}}
+  .diffcol h3{font-family:'Fraunces',serif; font-weight:500; font-size:16px; margin:0 0 4px}
+  .diffcol .dsub{font-size:11px; color:var(--faint); margin:0 0 12px; text-transform:uppercase; letter-spacing:.08em; font-weight:600}
+  .ditem{padding:9px 0; border-top:1px solid var(--hair); font-size:12.5px}
+  .ditem:first-of-type{border-top:none}
+  .ditem .dt{font-weight:600}
+  .ditem .dd{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .ditem .dd code{font-size:11px; background:var(--sink); padding:1px 5px; border-radius:4px}
+  .pill{font-size:9px; letter-spacing:.07em; text-transform:uppercase; font-weight:700; padding:1px 6px; border-radius:4px; margin-left:6px; vertical-align:middle}
+  .pill.keep{color:var(--green); background:rgba(47,138,78,.12)}
+  .pill.chg{color:var(--blue); background:rgba(47,93,153,.12)}
+  .pill.ret{color:var(--amber); background:rgba(154,107,30,.12)}
+
+  .callout{
+    border-left:3px solid var(--coral); background:rgba(214,74,67,.05); border-radius:0 8px 8px 0;
+    padding:12px 15px; margin:24px 0 0; font-size:13px; color:var(--ink);
+  }
+  .callout b{font-weight:600}
+  .section-label{font-family:'Fraunces',serif; font-weight:500; font-size:22px; margin:40px 0 16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="micro">AutoCut · architecture change · Option C — autonomy with a deterministic backstop</div>
+  <h1>What changes: the loop stops being code, and becomes Claude</h1>
+  <p class="sub">Today a <b>deterministic JS while-loop</b> drives the run and calls the model twice per iteration (build, grade). After this change, a <b>single autonomous Claude session</b> (Agent SDK, on Daytona) drives itself — calling tools, deciding when it's good enough, and looping on its own judgment. The harness no longer <i>runs</i> the loop; it <b>fences</b> it with hard caps and <b>watches</b> the stream to keep best-so-far. The Supabase plumbing in <code>agent-server.ts</code> is untouched.</p>
+
+  <div class="grid">
+
+    <!-- ════════════════ BEFORE ════════════════ -->
+    <div class="panel">
+      <h2><span class="tag before">Before · today</span> Deterministic loop</h2>
+      <p class="ph">src/loop/controller.ts — JS owns iteration; model is a one-shot per phase</p>
+
+      <div class="owns det">⚙ The <b>while-gate in controller.ts</b> owns the loop. The model never decides when to stop.</div>
+
+      <div class="flow">
+        <div class="node start">
+          <div class="nv">executeRun(run) · agent-server</div>
+          <div class="nd">claim · consult memory · best=null</div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="decide">
+          while gate
+          <div class="q">iter &lt; 4 &amp;&amp; tokens &lt; budget &amp;&amp; wall &lt; cap ?</div>
+        </div>
+        <div class="lbl yes">yes → iter++</div>
+
+        <div class="node agent">
+          <div class="nk">agent · one-shot</div>
+          <div class="nv">① buildEdl → EDL JSON</div>
+          <div class="nd">stateless call: <code>clips + feedback</code> → schema-validated EDL</div>
+          <span class="emit">◆ events: phase=BUILD</span>
+        </div>
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS</div>
+          <div class="nv">② validate · ③ render · ④ overlay</div>
+          <div class="nd">controller orchestrates ffmpeg + Remotion</div>
+          <span class="emit">◆ events: phase=RENDER</span>
+        </div>
+        <div class="conn short"></div>
+        <div class="node verify">
+          <div class="nk">agent · fresh ctx</div>
+          <div class="nv">⑤ grade → {scores, pass, feedback}</div>
+          <div class="nd">independent verifier, sees render + rubric only</div>
+          <span class="emit">◆ grades: 5 dims + pass</span>
+        </div>
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nv">⑥ best = max(best, grade.total)</div>
+          <div class="nd">deterministic, every iteration</div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="branch">
+          <div>
+            <div class="lbl no" style="margin:0 auto;display:block;width:fit-content">grade.pass? no</div>
+            <div class="loopback"><span class="arc">↻</span><span>feedback → while gate (JS re-enters)</span></div>
+          </div>
+          <div>
+            <div class="lbl yes" style="margin:0 auto;display:block;width:fit-content">yes / cap hit</div>
+            <div class="node ship"><div class="nv">SHIP best-so-far</div><div class="nd">→ distill · upload · status</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="lchip"><span class="ld" style="background:var(--blue)"></span>agent() — one-shot model call</span>
+        <span class="lchip"><span class="ld" style="background:var(--ink)"></span>plain JS — drives the loop</span>
+        <span class="lchip"><span class="ld" style="background:var(--green)"></span>◆ Supabase write</span>
+      </div>
+    </div>
+
+    <!-- ════════════════ AFTER ════════════════ -->
+    <div class="panel">
+      <h2><span class="tag after">After · Daytona</span> Autonomous agent</h2>
+      <p class="ph">src/agent/session.ts — Claude owns iteration; JS fences &amp; watches it</p>
+
+      <div class="owns agent">🧠 <b>Claude (Agent SDK)</b> owns the loop. It calls tools and decides when it's done — the harness only caps &amp; observes.</div>
+
+      <div class="flow">
+        <div class="node start">
+          <div class="nv">executeRun(run) · agent-server <b>(unchanged)</b></div>
+          <div class="nd">claim · consult memory · best=null</div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS · harness</div>
+          <div class="nv">runAgentSession: query() launch</div>
+          <div class="nd">systemPrompt = goal+rubric+memory · register tools · model=<code>claude-opus-4-8</code></div>
+        </div>
+
+        <div class="conn"></div>
+
+        <!-- cap fence wraps the autonomous block -->
+        <div class="fence">
+          <div class="fencehdr">⛓ deterministic backstop — the fence</div>
+          <div style="font-size:11px; color:var(--amber); font-weight:600; margin-bottom:11px; line-height:1.5">
+            maxTurns (SDK) · maxBudgetUsd (SDK) · wall-clock → <code style="font-size:10px">query.close()</code>. Any trip → force-exit, ship best-so-far.
+          </div>
+
+          <div class="auto">
+            <div class="autohdr">🧠 Claude autonomous session — its judgment, not JS</div>
+
+            <div class="node tool">
+              <div class="nk">tool</div>
+              <div class="nv">search_clips · build_edl</div>
+              <div class="nd">Claude picks clips &amp; composes the cut</div>
+            </div>
+            <div class="conn short"></div>
+            <div class="node tool">
+              <div class="nk">tool</div>
+              <div class="nv">render</div>
+              <div class="nd">stub now → ffmpeg+Remotion later (same interface)</div>
+              <span class="watch">⛓ harness watches: emits ◆ events</span>
+            </div>
+            <div class="conn short"></div>
+            <div class="node tool">
+              <div class="nk">tool · independent verifier inside</div>
+              <div class="nv">grade → {scores, pass, feedback}</div>
+              <div class="nd">fresh-context grader; result returned to Claude</div>
+              <span class="watch">⛓ harness watches: record best-so-far</span>
+            </div>
+
+            <div class="innerloop"><span style="font-size:15px">↻</span><span>Claude reads the grade and decides: fix &amp; retry, or call publish</span></div>
+
+            <div class="conn short"></div>
+            <div class="node tool">
+              <div class="nk">tool · Claude's call</div>
+              <div class="nv">publish — "I'm satisfied"</div>
+              <div class="nd">the clean exit: agent declares done</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="branch">
+          <div>
+            <div class="lbl yes" style="margin:0 auto;display:block;width:fit-content">publish() → success</div>
+          </div>
+          <div>
+            <div class="lbl cap" style="margin:0 auto;display:block;width:fit-content">cap trips → error_max_*</div>
+          </div>
+        </div>
+        <div class="node ship"><div class="nv">SHIP best-so-far <b>(unchanged tail)</b></div><div class="nd">runAgentSession returns same shape → distill · upload · status</div></div>
+      </div>
+
+      <div class="legend">
+        <span class="lchip"><span class="ld" style="background:var(--blue)"></span>tool — Claude calls it</span>
+        <span class="lchip"><span class="ld" style="background:var(--amber)"></span>⛓ harness — caps &amp; watches</span>
+        <span class="lchip"><span class="ld" style="background:var(--green)"></span>◆ Supabase write</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ CODE SKELETON (AFTER) ════════════════ -->
+  <div class="section-label">The new brain — <code style="font-size:18px">src/agent/session.ts</code></div>
+  <div class="panel">
+    <p class="ph" style="margin-bottom:14px">The while-gate is gone. <code>query()</code> drives; the caps fence it; the stream loop emits + tracks best-so-far. Compare to controller.ts — the deterministic <i>responsibilities</i> survive, but they move from <b>driving</b> the loop to <b>fencing</b> it.</p>
+<pre><span class="c">// caps are the BACKSTOP now — Claude drives, the harness fences</span>
+<span class="k">const</span> <span class="cap">CAP_TURNS</span> = <span class="n">12</span>, <span class="cap">CAP_BUDGET_USD</span> = <span class="n">0.50</span>, <span class="cap">CAP_WALL_MS</span> = <span class="n">120_000</span>
+
+<span class="k">async function</span> <span class="f">runAgentSession</span>(input, tools, emit) {
+  <span class="k">let</span> best = <span class="k">null</span>
+  <span class="c">// tools = in-process Agent SDK tools wrapping our modules (STUB impls on day 1)</span>
+  <span class="k">const</span> server = <span class="f">createSdkMcpServer</span>({ name: <span class="s">'autocut'</span>, tools }) <span class="c">// search_clips·build_edl·render·grade·publish</span>
+
+  <span class="k">const</span> q = <span class="f">query</span>({
+    prompt: <span class="f">goalFrom</span>(input),            <span class="c">// brief + rubric + consulted memory rules</span>
+    options: {
+      model: <span class="s">'claude-opus-4-8'</span>,
+      mcpServers: { autocut: server },
+      allowedTools: [<span class="s">'mcp__autocut__search_clips'</span>, <span class="s">'…'</span>, <span class="s">'mcp__autocut__publish'</span>],
+      permissionMode: <span class="s">'bypassPermissions'</span>,  <span class="c">// headless — no prompts</span>
+      <span class="cap">maxTurns</span>: CAP_TURNS,               <span class="c">// ← SDK-enforced cap #1</span>
+      <span class="cap">maxBudgetUsd</span>: CAP_BUDGET_USD,       <span class="c">// ← SDK-enforced cap #2</span>
+    },
+  })
+  <span class="k">const</span> timer = <span class="f">setTimeout</span>(() =&gt; q.<span class="f">close</span>(), <span class="cap">CAP_WALL_MS</span>)  <span class="c">// ← wall-clock cap #3</span>
+
+  <span class="k">for await</span> (<span class="k">const</span> msg <span class="k">of</span> q) {
+    <span class="k">if</span> (msg.type === <span class="s">'assistant'</span>) <span class="f">emitToolSteps</span>(msg, emit)        <span class="c">// ◆ events row per tool call</span>
+    <span class="k">if</span> (<span class="f">isGradeResult</span>(msg)) best = <span class="f">bestOf</span>(best, <span class="f">parseGrade</span>(msg)) <span class="c">// best-so-far, unconditional</span>
+    <span class="k">if</span> (msg.type === <span class="s">'result'</span>) {                              <span class="c">// success | error_max_turns | error_max_budget_usd</span>
+      <span class="f">clearTimeout</span>(timer)
+      <span class="k">return</span> { shipped: best, passed: best?.grade.pass ?? <span class="k">false</span>, stop: msg.subtype }
+    }
+  }
+}</pre>
+    <div class="callout">
+      <b>Same contract, swapped engine:</b> <code>runAgentSession</code> returns the exact <code>{ shipped, passed }</code> shape <code>runLoop</code> did — so <code>executeRun</code>'s distill → upload → status tail, and <i>all</i> of agent-server's Supabase plumbing, never change. The swap is one call site.
+    </div>
+  </div>
+
+  <!-- ════════════════ THE DIFF ════════════════ -->
+  <div class="section-label">The diff, file by file</div>
+  <div class="panel">
+    <div class="diffgrid">
+
+      <div class="diffcol">
+        <h3>Kept <span class="pill keep">unchanged</span></h3>
+        <div class="dsub">agent-server.ts plumbing</div>
+        <div class="ditem"><div class="dt">claimRun · reclaimQueued</div><div class="dd">atomic claim + restart-safe sweep</div></div>
+        <div class="ditem"><div class="dt">Realtime <code>runs</code> subscription</div><div class="dd">UI "Generate" → agent, same seam</div></div>
+        <div class="ditem"><div class="dt">makeSupabaseEmit → <code>events</code></div><div class="dd">live feed to the UI, same rows</div></div>
+        <div class="ditem"><div class="dt">consult / distill memory</div><div class="dd">outer loop, file-based on Daytona</div></div>
+        <div class="ditem"><div class="dt">Storage upload · updateRunStatus</div><div class="dd">deliver render, shipped/failed</div></div>
+      </div>
+
+      <div class="diffcol">
+        <h3>Changed <span class="pill chg">swap brain</span></h3>
+        <div class="dsub">one call site + new module</div>
+        <div class="ditem"><div class="dt">executeRun: <code>runLoop()</code> → <code>runAgentSession()</code></div><div class="dd">single-line swap; result shape identical</div></div>
+        <div class="ditem"><div class="dt">+ src/agent/session.ts <span class="pill chg">new</span></div><div class="dd">query() driver: caps fence + stream watch</div></div>
+        <div class="ditem"><div class="dt">+ src/agent/tools.ts <span class="pill chg">new</span></div><div class="dd">in-process tools, injected stub→real impls</div></div>
+        <div class="ditem"><div class="dt">env: RENDER_MODE → <code>AGENT_TOOLS=stub|real</code></div><div class="dd">selects which tool impls inject</div></div>
+        <div class="ditem"><div class="dt">+ ANTHROPIC_API_KEY now required</div><div class="dd">the brain is real Claude even in stub-tools</div></div>
+      </div>
+
+      <div class="diffcol">
+        <h3>Retired <span class="pill ret">off live path</span></h3>
+        <div class="dsub">kept in repo, tests stay green</div>
+        <div class="ditem"><div class="dt">controller.ts — the while-gate</div><div class="dd">Claude owns iteration now; caps move into the SDK</div></div>
+        <div class="ditem"><div class="dt">deps.ts · createLoopDeps</div><div class="dd">replaced by tool injection in tools.ts</div></div>
+        <div class="ditem"><div class="dt">stubs.ts loop wiring</div><div class="dd">stub <i>tools</i> replace stub <i>deps</i></div></div>
+        <div class="ditem" style="border-top:1px dashed var(--amber); margin-top:6px; padding-top:10px"><div class="dt" style="color:var(--amber)">Not deleted</div><div class="dd">task-#1 artifact; usable as a fallback engine + its tests keep the contracts honest</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="callout" style="max-width:none">
+    <b>The one idea to take away:</b> the boundary between "model" and "deterministic code" doesn't disappear — it <b>moves</b>. Before, JS held the loop and the model filled in two blanks. After, the model holds the loop and JS draws a <b>fence</b> around it (caps) and a <b>camera</b> on it (stream-watch → events + best-so-far). The PRD's #1 rule — "never trust the model to self-terminate; always ship something" — is enforced exactly as before, just by <code>maxTurns</code>/<code>maxBudgetUsd</code>/<code>close()</code> instead of a <code>while</code> condition.
+  </div>
+
+</div>
+</body>
+</html>

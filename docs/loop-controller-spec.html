@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoCut — loop/ Controller Spec (§0b build step 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9E5DD; --card:#FBFAF7; --sink:#F3F1EA; --ink:#22211D;
+    --muted:#6B6760; --faint:#A6A096; --hair:#D8D3C8;
+    --coral:#D64A43; --green:#2F8A4E; --red:#C0392B; --amber:#9A6B1E; --blue:#2F5D99;
+    --shadow:3px 4px 0 rgba(34,33,29,.07);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; line-height:1.5; padding:48px 32px 80px;
+  }
+  .wrap{max-width:1240px; margin:0 auto}
+  .micro{font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); font-weight:600}
+  h1{font-family:'Fraunces',serif; font-weight:500; font-size:36px; margin:8px 0 6px; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:15px; max-width:760px; margin:0 0 32px}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+  .grid{display:grid; grid-template-columns:1.05fr .95fr; gap:24px; align-items:start}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--card); border:1px solid var(--hair); border-radius:13px; box-shadow:var(--shadow); padding:22px 24px}
+  .panel h2{font-family:'Fraunces',serif; font-weight:500; font-size:20px; margin:0 0 4px}
+  .panel .ph{font-size:12px; color:var(--muted); margin:0 0 18px}
+
+  /* flow nodes */
+  .flow{display:flex; flex-direction:column; align-items:stretch; gap:0}
+  .node{
+    border:1px solid var(--hair); border-radius:10px; padding:12px 15px; background:var(--sink);
+    position:relative;
+  }
+  .node .nk{font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; color:var(--faint); margin-bottom:3px}
+  .node .nv{font-size:13.5px; font-weight:600}
+  .node .nd{font-size:11.5px; color:var(--muted); margin-top:3px}
+  .node .nd code{font-size:11px; background:var(--card); padding:1px 5px; border-radius:4px; color:var(--ink)}
+
+  .node.start{background:var(--ink); color:#fff; text-align:center; border-color:var(--ink)}
+  .node.start .nv{font-size:14px}
+  .node.start .nd{color:#cfcabf}
+  .node.agent{border-left:3px solid var(--blue)}
+  .node.det{border-left:3px solid var(--ink)}
+  .node.verify{border-left:3px solid var(--green)}
+  .node.ship{background:#eaf3ed; border:1.5px solid var(--green)}
+  .node.ship .nv{color:var(--green)}
+
+  /* decision diamond-ish */
+  .decide{
+    align-self:center; background:var(--card); border:1.5px solid var(--amber);
+    color:var(--amber); border-radius:8px; padding:9px 16px; font-weight:600; font-size:13px;
+    text-align:center; position:relative;
+  }
+  .decide .q{font-size:11px; color:var(--muted); font-weight:500; margin-top:2px}
+
+  .conn{height:18px; width:2px; background:var(--hair); align-self:center; margin:0}
+  .conn.short{height:11px}
+  .lbl{align-self:center; font-size:11px; font-weight:600; padding:1px 9px; border-radius:20px; margin:5px 0}
+  .lbl.no{color:var(--red); background:rgba(192,57,43,.08)}
+  .lbl.yes{color:var(--green); background:rgba(47,138,78,.1)}
+  .lbl.cap{color:var(--amber); background:rgba(154,107,30,.1)}
+
+  /* loop-back bracket */
+  .loopback{
+    border:1px dashed var(--coral); border-radius:9px; padding:9px 13px; margin:8px 0;
+    background:rgba(214,74,67,.04); font-size:12px; color:var(--coral); font-weight:500;
+    display:flex; align-items:center; gap:8px;
+  }
+  .loopback .arc{font-size:15px}
+
+  .emit{
+    display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600;
+    color:var(--green); background:rgba(47,138,78,.09); border:1px solid rgba(47,138,78,.25);
+    border-radius:20px; padding:2px 8px; margin-top:7px;
+  }
+
+  .branch{display:flex; gap:12px; margin-top:8px}
+  .branch > div{flex:1}
+
+  /* code block */
+  pre{
+    background:#1c1b17; color:#e8e4d8; border-radius:11px; padding:18px 18px; margin:0 0 18px;
+    font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.65; overflow-x:auto;
+  }
+  pre .c{color:#8f897a}      /* comment */
+  pre .k{color:#e08a7a}      /* keyword */
+  pre .f{color:#cdbd87}      /* fn / ident */
+  pre .s{color:#9fc08a}      /* string */
+  pre .n{color:#d9a05b}      /* number */
+  pre .cap{color:#e0b450; font-weight:600} /* cap highlight */
+
+  .legend{display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0}
+  .lchip{display:inline-flex; align-items:center; gap:7px; font-size:11.5px; color:var(--muted); font-weight:500}
+  .ld{width:11px; height:11px; border-radius:3px}
+
+  /* checklist */
+  .check h3{font-family:'Fraunces',serif; font-weight:500; font-size:17px; margin:0 0 12px}
+  .task{display:flex; gap:10px; align-items:flex-start; padding:9px 0; border-top:1px solid var(--hair)}
+  .task:first-of-type{border-top:none}
+  .cbox{width:16px; height:16px; border:1.5px solid var(--coral); border-radius:4px; flex:none; margin-top:2px}
+  .task .t{font-size:13px; font-weight:600}
+  .task .ts{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .task .ts code{font-size:11px; background:var(--sink); padding:1px 5px; border-radius:4px}
+  .stub{font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--coral); background:rgba(214,74,67,.1); padding:1px 6px; border-radius:4px; margin-left:6px; vertical-align:middle}
+
+  .callout{
+    border-left:3px solid var(--coral); background:rgba(214,74,67,.05); border-radius:0 8px 8px 0;
+    padding:11px 14px; margin:18px 0 0; font-size:12.5px; color:var(--ink);
+  }
+  .callout b{font-weight:600}
+
+  .contracts{margin-top:18px}
+  .contracts .row{display:flex; gap:10px; font-size:12px; padding:7px 0; border-top:1px solid var(--hair)}
+  .contracts .row:first-of-type{border-top:none}
+  .contracts .nm{font-family:ui-monospace,Menlo,monospace; font-weight:600; color:var(--coral); min-width:70px}
+  .contracts .ds{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div style="border:1.5px solid #9A6B1E;background:rgba(154,107,30,.08);border-radius:10px;padding:12px 16px;margin:0 0 24px;font-size:13px;color:#22211D">
+    <b>Retired from the live path</b> as of the Agent SDK migration. This describes the deterministic engine,
+    now kept as a tested library + fallback. For the live design see
+    <a href="loop-vs-agent-spec.html">loop-vs-agent-spec.html</a>.
+  </div>
+
+  <div class="micro">AutoCut · §0b build order — step 1 · loop/ controller</div>
+  <h1>The self-correction loop, zoomed in</h1>
+  <p class="sub">The deterministic JS control flow that owns termination. Build this <b>first</b> with stubbed builder/render/verify returning canned data — prove caps, best-so-far, and Realtime events end-to-end on day 1, before any real ffmpeg or agent exists. The green pills mark every point the controller writes a row to Supabase.</p>
+
+  <div class="grid">
+
+    <!-- LEFT: control flow -->
+    <div class="panel">
+      <h2>Control flow</h2>
+      <p class="ph">one run · caps ≤ 4 iters · best-so-far always retained</p>
+
+      <div class="flow">
+        <div class="node start">
+          <div class="nv">enter run(brief, rubric)</div>
+          <div class="nd">best = null · iter = 0 · feedback = null</div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="decide">
+          while gate
+          <div class="q">iter &lt; 4 &amp;&amp; tokens &lt; budget &amp;&amp; wall &lt; cap ?</div>
+        </div>
+
+        <div class="lbl yes">yes → iter++</div>
+
+        <div class="node agent">
+          <div class="nk">agent · model judgment</div>
+          <div class="nv">① Builder → EDL (JSON)</div>
+          <div class="nd">reads <code>clips.json</code> + <code>feedback</code> → schema-validated EDL</div>
+          <span class="emit">◆ events row: phase=BUILD</span>
+        </div>
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS</div>
+          <div class="nv">② validate EDL</div>
+          <div class="nd">invalid? → bounce to ① (counts as the iteration)</div>
+        </div>
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS</div>
+          <div class="nv">③ render: ffmpeg cut (+LUT)</div>
+          <div class="nd">try/catch → on error, fail iter, keep best</div>
+          <span class="emit">◆ events row: phase=RENDER</span>
+        </div>
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS</div>
+          <div class="nv">④ overlay: Remotion → fallback drawtext</div>
+          <div class="nd">captioned video always ships</div>
+        </div>
+        <div class="conn short"></div>
+        <div class="node verify">
+          <div class="nk">agent · FRESH context</div>
+          <div class="nv">⑤ Director verifier → grade</div>
+          <div class="nd">sees video + rubric ONLY · returns <code>{scores, pass, feedback}</code></div>
+          <span class="emit">◆ grades row: 5 dims + pass</span>
+        </div>
+
+        <div class="conn short"></div>
+        <div class="node det">
+          <div class="nk">deterministic JS</div>
+          <div class="nv">⑥ best = max(best, grade.total)</div>
+          <div class="nd">best-so-far updated every iteration, unconditionally</div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="decide" style="border-color:var(--green); color:var(--green)">
+          grade.pass ?
+          <div class="q">every dim ≥ 7 ?</div>
+        </div>
+
+        <div class="branch">
+          <div>
+            <div class="lbl no" style="margin-left:auto;margin-right:auto;display:block;width:fit-content">no</div>
+            <div class="loopback">
+              <span class="arc">↻</span>
+              <span>feedback = grade.feedback → back to while gate</span>
+            </div>
+          </div>
+          <div>
+            <div class="lbl yes" style="margin-left:auto;margin-right:auto;display:block;width:fit-content">yes — break</div>
+            <div class="node ship">
+              <div class="nv">SHIP best</div>
+              <div class="nd">+ memory rule</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="conn"></div>
+        <div class="lbl cap">while gate false (cap exhausted)</div>
+        <div class="node ship" style="background:#f6efe3; border-color:var(--amber)">
+          <div class="nv" style="color:var(--amber)">SHIP best-so-far</div>
+          <div class="nd">surface "passed N/5, stopped at iter K" · never stall, never ship nothing</div>
+          <span class="emit" style="color:var(--amber); background:rgba(154,107,30,.1); border-color:rgba(154,107,30,.3)">◆ events row: phase=DONE</span>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="lchip"><span class="ld" style="background:var(--blue)"></span>agent() — model</span>
+        <span class="lchip"><span class="ld" style="background:var(--ink)"></span>plain JS — deterministic</span>
+        <span class="lchip"><span class="ld" style="background:var(--green)"></span>verifier (fresh ctx)</span>
+        <span class="lchip"><span class="ld" style="background:var(--coral)"></span>◆ = Supabase write</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: code + checklist -->
+    <div>
+      <div class="panel">
+        <h2>Code skeleton</h2>
+        <p class="ph">loop/controller.js — what step 1 actually writes</p>
+<pre><span class="c">// caps live in code, not in the agent's head</span>
+<span class="k">const</span> <span class="cap">CAP_ITERS</span> = <span class="n">4</span>, <span class="cap">CAP_TOKENS</span> = <span class="n">budget</span>, <span class="cap">CAP_WALL_MS</span> = <span class="n">120_000</span>
+
+<span class="k">async function</span> <span class="f">run</span>(brief, rubric, run_id) {
+  <span class="k">let</span> best = <span class="k">null</span>, iter = <span class="n">0</span>, feedback = <span class="k">null</span>
+  <span class="k">const</span> t0 = clock()
+
+  <span class="k">while</span> (
+    iter &lt; <span class="cap">CAP_ITERS</span> &amp;&amp;
+    tokens() &lt; <span class="cap">CAP_TOKENS</span> &amp;&amp;
+    clock() - t0 &lt; <span class="cap">CAP_WALL_MS</span>
+  ) {
+    iter++
+
+    <span class="c">// ① builder — STUB on day 1: return canned EDL</span>
+    <span class="k">const</span> edl = <span class="k">await</span> <span class="f">builder</span>(clips, feedback)
+    <span class="k">await</span> <span class="f">emit</span>(run_id, iter, <span class="s">'BUILD'</span>)
+
+    <span class="c">// ② validate — real from day 1 (deterministic)</span>
+    <span class="k">if</span> (!<span class="f">validateEDL</span>(edl, clips)) { feedback = <span class="s">'invalid edl'</span>; <span class="k">continue</span> }
+
+    <span class="c">// ③④ render+overlay — STUB: return canned file ref</span>
+    <span class="k">const</span> render = <span class="k">await</span> <span class="f">renderAndOverlay</span>(edl)
+    <span class="k">await</span> <span class="f">emit</span>(run_id, iter, <span class="s">'RENDER'</span>, render.ref)
+
+    <span class="c">// ⑤ verifier — STUB: canned grade (fail iter 1, pass iter 2)</span>
+    <span class="k">const</span> grade = <span class="k">await</span> <span class="f">verify</span>(render, rubric)
+    <span class="k">await</span> <span class="f">emitGrade</span>(run_id, iter, grade)
+
+    <span class="c">// ⑥ best-so-far — unconditional</span>
+    <span class="k">if</span> (!best || grade.total &gt; best.grade.total) best = { render, grade }
+
+    <span class="k">if</span> (grade.pass) <span class="k">break</span>   <span class="c">// every dim ≥ 7</span>
+    feedback = grade.feedback   <span class="c">// ↻ loop</span>
+  }
+
+  <span class="k">await</span> <span class="f">writeMemoryRule</span>(best)
+  <span class="k">await</span> <span class="f">emit</span>(run_id, iter, <span class="s">'DONE'</span>, best.render.ref, best.grade)
+  <span class="k">return</span> { shipped: best, stoppedAt: iter, passed: best.grade.pass }
+}</pre>
+
+        <div class="callout">
+          <b>Why the while-gate, not <code>/goal</code>:</b> the agent never decides when to stop. Three caps in one boolean guarantee the loop terminates; <code>best</code> guarantees it ships something. That pair is your #1 demo-killer mitigation (§0 Loop Termination) — and it's testable with stubs, no ffmpeg or model needed.
+        </div>
+      </div>
+
+      <div class="panel check" style="margin-top:24px">
+        <h3>Day-1 build checklist (step 1)</h3>
+
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">while-gate + 3 caps</div>
+            <div class="ts">iters ≤ 4 · token budget · wallclock. Unit-test: a never-passing stub stops at exactly 4.</div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">best-so-far tracking</div>
+            <div class="ts">Unit-test: feed grades 5,8,6 → best stays 8 after the 6.</div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">stub builder / render / verify <span class="stub">stub</span></div>
+            <div class="ts">Canned data. Verifier scripted: <code>fail iter 1 → pass iter 2</code> (the money-shot rehearsal).</div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">EDL validator</div>
+            <div class="ts"><b>Real, not stubbed</b> — duration ± tol · clip_id ∈ clips · caption t in segment. Invalid → bounce, counts as iter.</div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">emit() → Supabase rows</div>
+            <div class="ts">Write <code>events</code> + <code>grades</code> after each phase. This is the seam the UI subscribes to.</div>
+          </div>
+        </div>
+        <div class="task">
+          <div class="cbox"></div>
+          <div>
+            <div class="t">cap-exhaustion path</div>
+            <div class="ts">Ship best-so-far + "passed N/5, iter K". Unit-test the never-converge branch.</div>
+          </div>
+        </div>
+
+        <div class="contracts">
+          <div class="micro" style="margin-bottom:8px">Contracts this step freezes</div>
+          <div class="row"><span class="nm">EDL</span><span class="ds">builder output — schema-validated before any render (§0b D2)</span></div>
+          <div class="row"><span class="nm">grade</span><span class="ds">{ scores{5}, pass, feedback{dim:note}, render_id }</span></div>
+          <div class="row"><span class="nm">events</span><span class="ds">{ run_id, iteration, phase, message, score_snapshot?, render_ref?, ts }</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" style="margin-top:24px; max-width:none">
+    <b>The boundary that makes it work:</b> only ① Builder and ⑤ Verifier are <code>agent()</code> calls (blue). Everything else — the while-gate, validate, best-so-far, render orchestration, emit — is plain deterministic JS (ink). Step 1 proves that skeleton with the two agents stubbed. Steps 2→5 of the build order then swap each stub for the real module (EDL renderer → overlay → verifier → builder) without touching this control flow. The interface freezes here.
+  </div>
+
+</div>
+</body>
+</html>

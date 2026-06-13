@@ -22,12 +22,19 @@ import {
   upsertEmbeddings,
   type SupabaseLike,
 } from "./pgvector.js";
+import {
+  makeStorageClient,
+  uploadLibraryAssets,
+  SOURCE_CLIPS_BUCKET,
+} from "./storage.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SAMPLE = join(here, "..", "__fixtures__", "sample.mp4");
 
 const hasReplicate = !!process.env.REPLICATE_API_TOKEN;
-const hasSupabase = !!process.env.SUPABASE_URL && !!process.env.SUPABASE_KEY;
+const hasSupabase =
+  !!process.env.SUPABASE_URL &&
+  (!!process.env.SUPABASE_KEY || !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 /** Binary-safe exec for the integration run (mirrors cli.ts). */
 const execBinary: ExecFn = (cmd, args) =>
@@ -134,6 +141,33 @@ describe("preprocess integration", () => {
           },
         ]),
       ).resolves.not.toThrow();
+    },
+    120_000,
+  );
+
+  it.skipIf(!hasSupabase)(
+    "uploads clips + manifest to the real source-clips bucket",
+    async () => {
+      const client = makeStorageClient();
+      if (!client) throw new Error("expected a Storage client when SUPABASE_* set");
+      const lib = assembleLibrary("itest", [
+        {
+          id: "c01",
+          src: "c01.mov",
+          meta: { durationS: 3, width: 1080, height: 1920 },
+          transcript: [],
+          caption: "x",
+          tags: [],
+        },
+      ]);
+      const out = await uploadLibraryAssets(
+        client,
+        SOURCE_CLIPS_BUCKET,
+        "itest",
+        lib,
+        async () => new Uint8Array([0, 1, 2, 3]),
+      );
+      expect(out.clips[0]!.src).toBe("storage://itest/c01.mov");
     },
     120_000,
   );
