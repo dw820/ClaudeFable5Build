@@ -58,6 +58,26 @@ describe("transcribe", () => {
     expect(words).toEqual([{ word: "go", t0: 1.0, t1: 1.3 }]);
   });
 
+  it("interpolates words from segment-level output (no per-word array)", () => {
+    // Base openai/whisper returns segments with text + a span but no words[].
+    const words = parseWhisperWords({
+      segments: [{ start: 0, end: 2, text: "hello there" }],
+    });
+    expect(words).toEqual([
+      { word: "hello", t0: 0, t1: 1 },
+      { word: "there", t0: 1, t1: 2 },
+    ]);
+  });
+
+  it("prefers nested words[] over the segment-span fallback", () => {
+    const words = parseWhisperWords({
+      segments: [
+        { start: 0, end: 2, text: "hi yo", words: [{ word: "hi", start: 0.1, end: 0.4 }] },
+      ],
+    });
+    expect(words).toEqual([{ word: "hi", t0: 0.1, t1: 0.4 }]);
+  });
+
   it("parses flat words[] shape and clamps t1<t0", () => {
     const words = parseWhisperWords({
       words: [{ word: "x", start: 2, end: 1 }],
@@ -82,6 +102,22 @@ describe("transcribe", () => {
     expect(call.identifier).toBe(WHISPER_MODEL);
     expect(call.input).toEqual(whisperInput("media/a.mp4"));
     expect(call.input).toMatchObject({ audio: "media/a.mp4", timestamp: "word" });
+  });
+
+  it("degrades a no-audio clip to an empty transcript (does not throw)", async () => {
+    const runner = new FakeReplicateRunner(() => {
+      throw new Error(
+        "Prediction failed: Failed to load audio: ... Output file #0 does not contain any stream",
+      );
+    });
+    await expect(transcribeClip(runner, { audio: "silent.mp4" })).resolves.toEqual([]);
+  });
+
+  it("rethrows non-audio failures (auth, rate-limit, real model errors)", async () => {
+    const runner = new FakeReplicateRunner(() => {
+      throw new Error("401 Unauthorized");
+    });
+    await expect(transcribeClip(runner, { audio: "x.mp4" })).rejects.toThrow(/401/);
   });
 });
 

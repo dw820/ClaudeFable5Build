@@ -12,7 +12,7 @@
  * of the module stays unit-testable with no token / no ffmpeg.
  */
 import { spawn } from "node:child_process";
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join, relative } from "node:path";
 import { MEDIA_DIR_DEFAULT } from "./constants.js";
 import { makeReplicateRunner, type ReplicateRunner } from "./replicateClient.js";
@@ -114,8 +114,13 @@ export async function preprocessClip(
   mediaDir: string,
   absPath: string,
 ): Promise<ClipParts> {
+  // Whisper runs on Replicate, which needs a URI — not a local path. Until clips
+  // live in Storage (Phase 2: pass the public URL), upload the bytes inline: the
+  // Replicate SDK auto-uploads a Blob/File input and substitutes the hosted URL.
+  // The named File preserves the extension so whisper can demux the container.
+  const audio = new File([await readFile(absPath)], basename(absPath));
   const [transcript, understanding, meta] = await Promise.all([
-    transcribeClip(runner, { audio: absPath }),
+    transcribeClip(runner, { audio }),
     understandFrames(runner, sampler, { clipPath: absPath }),
     probe(absPath),
   ]);
