@@ -29,3 +29,57 @@ export function parseSceneCuts(stderr: string): number[] {
   }
   return [...times].sort((a, b) => a - b);
 }
+
+export interface WindowOptions {
+  minSceneS: number;
+  maxSceneS: number;
+}
+
+/**
+ * PURE: cuts + duration → contiguous windows covering `[0, duration]`, then
+ * merge (sub-`minSceneS` windows fold into the previous, or into the next if
+ * they are first) and subdivide (windows over `maxSceneS` split into equal
+ * sub-windows). Defends against a non-positive duration by returning [].
+ */
+export function buildWindows(cuts: number[], durationS: number, opts: WindowOptions): SceneWindow[] {
+  if (!(durationS > 0)) return [];
+
+  // 1. Boundaries → raw contiguous windows.
+  const bounds = [0, ...cuts.filter((c) => c > 0 && c < durationS), durationS];
+  const raw: SceneWindow[] = [];
+  for (let i = 0; i + 1 < bounds.length; i++) raw.push({ t0: bounds[i]!, t1: bounds[i + 1]! });
+
+  // 2. Merge windows shorter than the floor.
+  const merged: SceneWindow[] = [];
+  for (const w of raw) {
+    const prev = merged[merged.length - 1];
+    if (w.t1 - w.t0 < opts.minSceneS && prev) {
+      prev.t1 = w.t1; // fold into previous
+    } else if (w.t1 - w.t0 < opts.minSceneS && merged.length === 0) {
+      merged.push({ ...w }); // first window short: keep, next short one folds in
+    } else {
+      merged.push({ ...w });
+    }
+  }
+  // A short FIRST window left over (no following window absorbed it) folds forward.
+  if (merged.length >= 2 && merged[0]!.t1 - merged[0]!.t0 < opts.minSceneS) {
+    merged[1]!.t0 = merged[0]!.t0;
+    merged.shift();
+  }
+
+  // 3. Subdivide windows longer than the ceiling into equal sub-windows.
+  const out: SceneWindow[] = [];
+  for (const w of merged) {
+    const len = w.t1 - w.t0;
+    if (len > opts.maxSceneS) {
+      const n = Math.ceil(len / opts.maxSceneS);
+      const step = len / n;
+      for (let i = 0; i < n; i++) {
+        out.push({ t0: w.t0 + i * step, t1: i === n - 1 ? w.t1 : w.t0 + (i + 1) * step });
+      }
+    } else {
+      out.push(w);
+    }
+  }
+  return out;
+}
