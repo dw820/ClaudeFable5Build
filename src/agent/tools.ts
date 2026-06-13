@@ -103,6 +103,19 @@ export interface AutocutToolsDeps {
 
 const text = (t: string) => ({ content: [{ type: "text" as const, text: t }] });
 
+/** One-decimal second formatter for scene timecodes. */
+const fmtS = (n: number): string => n.toFixed(1);
+
+/** `id: caption [tags]`, plus indented timed scene lines when the clip has scenes. */
+function formatClipLine(c: Clip): string {
+  const base = `${c.id}: ${c.caption} [${c.tags.join(", ")}]`;
+  if (!c.scenes || c.scenes.length <= 1) return base;
+  const scenes = c.scenes
+    .map((s) => `\n    ${fmtS(s.t0)}–${fmtS(s.t1)}s: ${s.caption}`)
+    .join("");
+  return base + scenes;
+}
+
 /**
  * Build the five tool specs, wired to the injected impls, the tracker (best-so-far),
  * and the event sink. `iteration` increments on each build_edl — the agent's
@@ -122,7 +135,7 @@ export function createAutocutTools(deps: AutocutToolsDeps): { specs: ToolSpec[];
       handler: async (args) => {
         const clips = await impls.searchClips(String(args.query ?? ""), library);
         emit({ iteration, phase: "select", message: `search_clips → ${clips.length} candidates` });
-        return text(clips.map((c) => `${c.id}: ${c.caption} [${c.tags.join(", ")}]`).join("\n"));
+        return text(clips.map((c) => formatClipLine(c)).join("\n"));
       },
     },
     {

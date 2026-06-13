@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { EdlSchema, RUBRIC_DIMENSIONS } from "../loop/types.js";
+import { ClipLibrarySchema, EdlSchema, RUBRIC_DIMENSIONS } from "../loop/types.js";
 import type { LoopEvent } from "../loop/types.js";
 import { VIRAL_RUBRIC, SAMPLE_LIBRARY } from "../loop/stubs.js";
 import { makeStubToolImpls, createAutocutTools } from "./tools.js";
@@ -97,5 +97,30 @@ describe("createAutocutTools", () => {
     const renderId = /renderId=(\S+)/.exec(render.content[0]!.text)![1]!;
     const out = await byName("publish").handler({ renderId });
     expect(out.content[0]!.text).toMatch(/PUBLISHED/);
+  });
+
+  it("search_clips includes scene summaries when a clip has scenes", async () => {
+    const library = ClipLibrarySchema.parse({
+      projectId: "p",
+      clips: [{
+        id: "vlog1", src: "v.mp4", start: 0, end: 30, duration: 30,
+        resolution: [1080, 1920], transcript: [], caption: "a vlog", tags: ["vlog"],
+        scenes: [
+          { t0: 0, t1: 9.5, caption: "unboxing on a desk", tags: ["product"] },
+          { t0: 24, t1: 31, caption: "walking outside", tags: ["outdoor"] },
+        ],
+      }],
+    });
+    const tracker = new Tracker(VIRAL_RUBRIC);
+    const { specs } = createAutocutTools({
+      impls: makeStubToolImpls(),
+      library,
+      rubric: VIRAL_RUBRIC,
+      tracker,
+      emit: () => {},
+    });
+    const search = specs.find((s) => s.name === "search_clips")!;
+    const res = await search.handler({ query: "anything" });
+    expect(res.content[0]!.text).toContain("9.5s: unboxing on a desk");
   });
 });
