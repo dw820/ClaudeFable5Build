@@ -42,7 +42,7 @@ if (missing.length) {
   process.exit(1);
 }
 
-const REPO_BRANCH = process.env.REPO_BRANCH ?? "feat/autonomous-agent-daytona";
+const REPO_BRANCH = process.env.REPO_BRANCH ?? "main";
 const REPO_HOST = "github.com/dw820/ClaudeFable5Build.git";
 const REPO_URL = process.env.GITHUB_TOKEN
   ? `https://${process.env.GITHUB_TOKEN}@${REPO_HOST}`
