@@ -279,6 +279,29 @@ describe("assemble", () => {
     expect(() => ClipLibrarySchema.parse(lib)).not.toThrow();
     expect(lib.clips[0]!.transcript).toEqual([]);
   });
+
+  it("attaches scenes and derives caption from the midpoint scene + union tags", () => {
+    const clip = buildClip(
+      partFixture({
+        caption: "", tags: [],
+        scenes: [
+          { t0: 0, t1: 4, caption: "intro on the beach", tags: ["intro", "ocean"] },
+          { t0: 4, t1: 12, caption: "the wipeout", tags: ["action", "ocean"] },
+        ],
+      }),
+    );
+    expect(clip.scenes).toHaveLength(2);
+    // midpoint of a 12s clip is 6s → falls in the second window (4–12)
+    expect(clip.caption).toBe("the wipeout");
+    expect(clip.tags).toEqual(["intro", "ocean", "action"]); // union, de-duped, order-preserved
+  });
+
+  it("falls back to parts.caption/tags when there are no scenes (single-frame path)", () => {
+    const clip = buildClip(partFixture({ caption: "single", tags: ["x"] }));
+    expect(clip.scenes).toBeUndefined();
+    expect(clip.caption).toBe("single");
+    expect(clip.tags).toEqual(["x"]);
+  });
 });
 
 /* ------------------------------ pgvector ------------------------------- */
