@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* AutoCut tokens — PRD §0c (elegant warm-paper / creative-studio). */
+:root {
+  --bg: #e9e5dd;
+  --card: #fbfaf7;
+  --sink: #f3f1ea;
+  --ink: #22211d;
+  --text: #3d3a33;
+  --muted: #6b6760;
+  --faint: #a19c91;
+  --line: #d8d3c8;
+  --coral: #d64a43;
+  --coral-d: #b83c36;
+  --pass: #2f8a4e;
+  --pass-soft: #e4f1e8;
+  --amber: #9a6b1e;
+  --amber-soft: #f6ecd9;
+  --fail: #c0392b;
+  --fail-soft: #fae7e4;
+  --blue: #2f5d99;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures for scores/timers. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
