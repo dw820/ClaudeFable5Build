@@ -23,26 +23,31 @@
     "@remotion/cli": "^4.0.476",
     "@remotion/renderer": "^4.0.476",
     "@supabase/supabase-js": "^2.108.1",
-    "autoprefixer": "^10.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "lucide-react": "^1.18.0",
     "next": "^16.2.9",
-    "postcss": "^8.5.15",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "remotion": "^4.0.476",
     "replicate": "^1.4.0",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^3.4.19",
-    "zod": "^3.23.8"
+    "tailwindcss": "^4.3.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.15",
     "tsx": "^4.22.4",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "//overrides": "Force patched transitive deps that next@16 / @remotion/cli@4 still pin to vulnerable ranges (esbuild dev-server CVEs, postcss CSS-stringify XSS). Both are build-time-only; npm's only suggested 'fix' is downgrading the parent major, which would reintroduce the original CVEs.",
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "postcss": "^8.5.15"
   }
 }

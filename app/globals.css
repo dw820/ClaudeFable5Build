@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Keep the existing design-token config (PRD §0c) under Tailwind 4's engine.
+   The JS config maps `bg-card`, `text-ink`, `bg-coral`, … to the CSS vars below. */
+@config "../tailwind.config.ts";
 
 /* AutoCut tokens — PRD §0c (elegant warm-paper / creative-studio). */
 :root {
@@ -21,6 +23,17 @@
   --fail: #c0392b;
   --fail-soft: #fae7e4;
   --blue: #2f5d99;
+}
+
+/* Tailwind 4 sets the default border/divide color to `currentColor` (v3 used
+   gray-200). All borders in the app specify an explicit color, but pin the
+   default to the paper `--line` token so any unscoped border stays on-theme. */
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--line);
+  }
 }
 
 html,

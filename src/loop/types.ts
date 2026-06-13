@@ -90,7 +90,7 @@ export const GradeSchema = z.object({
     on_style_trend_fit: ScoreSchema,
   }),
   /** Per-failing-dimension actionable feedback, keyed by dimension. */
-  feedback: z.record(z.string()).default({}),
+  feedback: z.record(z.string(), z.string()).default({}),
 });
 export type Grade = z.infer<typeof GradeSchema>;
 

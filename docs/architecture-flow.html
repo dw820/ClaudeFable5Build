@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoCut — Request Flow & Dynamic Workflow Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9E5DD; --card:#FBFAF7; --sink:#F3F1EA; --ink:#22211D;
+    --muted:#6B6760; --faint:#A6A096; --hair:#D8D3C8;
+    --coral:#D64A43; --green:#2F8A4E; --red:#C0392B; --amber:#9A6B1E; --blue:#2F5D99;
+    --shadow:3px 4px 0 rgba(34,33,29,.07);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; line-height:1.5;
+    padding:48px 32px 80px;
+  }
+  .wrap{max-width:1240px; margin:0 auto}
+  .micro{
+    font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--faint); font-weight:600;
+  }
+  h1{
+    font-family:'Fraunces',serif; font-weight:500; font-size:38px;
+    margin:8px 0 6px; letter-spacing:-.01em;
+  }
+  .sub{color:var(--muted); font-size:15px; max-width:720px; margin:0 0 36px}
+
+  /* legend */
+  .legend{display:flex; gap:18px; flex-wrap:wrap; margin:0 0 32px; align-items:center}
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; font-size:12px;
+    color:var(--muted); font-weight:500;
+  }
+  .dot{width:11px; height:11px; border-radius:3px; display:inline-block}
+
+  /* layered layout */
+  .layer{
+    background:var(--card); border:1px solid var(--hair); border-radius:13px;
+    box-shadow:var(--shadow); padding:20px 22px; margin:0 0 20px; position:relative;
+  }
+  .layer-head{display:flex; align-items:baseline; gap:12px; margin-bottom:16px}
+  .layer-head h2{
+    font-family:'Fraunces',serif; font-weight:500; font-size:21px; margin:0;
+  }
+  .layer-tag{
+    font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:600;
+    padding:3px 9px; border-radius:20px; color:#fff;
+  }
+  .tag-browser{background:var(--ink)}
+  .tag-daytona{background:var(--coral)}
+  .tag-supa{background:var(--green)}
+  .tag-models{background:var(--blue)}
+
+  .row{display:flex; gap:14px; flex-wrap:wrap}
+  .box{
+    background:var(--sink); border:1px solid var(--hair); border-radius:11px;
+    padding:13px 15px; flex:1; min-width:180px;
+  }
+  .box h3{font-size:13.5px; margin:0 0 5px; font-weight:600}
+  .box p{font-size:12px; color:var(--muted); margin:0}
+  .box .api{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11.5px; color:var(--coral)}
+
+  /* arrows between layers */
+  .flow{
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    margin:-6px 0 14px; flex-wrap:wrap;
+  }
+  .arrow{
+    display:inline-flex; align-items:center; gap:9px;
+    font-size:12px; color:var(--muted); font-weight:500;
+  }
+  .arrow .glyph{font-size:18px; color:var(--ink)}
+  .arrow.down .glyph{color:var(--coral)}
+  .arrow.up{color:var(--green)}
+  .arrow.up .glyph{color:var(--green)}
+  .arrow .code{font-family:ui-monospace,Menlo,monospace; font-size:11px}
+
+  /* the loop — the star */
+  .loop{
+    border:2px solid var(--coral); border-radius:13px; padding:18px 20px;
+    background:linear-gradient(0deg,rgba(214,74,67,.04),rgba(214,74,67,.04));
+    position:relative; margin-top:6px;
+  }
+  .loop-badge{
+    position:absolute; top:-12px; left:18px; background:var(--coral); color:#fff;
+    font-size:10px; letter-spacing:.12em; text-transform:uppercase; font-weight:600;
+    padding:4px 11px; border-radius:20px;
+  }
+  .loop-sub{font-size:12px; color:var(--muted); margin:4px 0 16px}
+  .steps{display:flex; align-items:stretch; gap:8px; flex-wrap:wrap}
+  .step{
+    background:var(--card); border:1px solid var(--hair); border-radius:9px;
+    padding:10px 12px; flex:1; min-width:110px; position:relative;
+  }
+  .step .k{font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:600; color:var(--faint); margin-bottom:3px}
+  .step .v{font-size:12.5px; font-weight:600}
+  .step .d{font-size:11px; color:var(--muted); margin-top:2px}
+  .step.agent{border-left:3px solid var(--blue)}
+  .step.det{border-left:3px solid var(--ink)}
+  .step.verify{border-left:3px solid var(--green)}
+  .seq{display:flex; align-items:center; color:var(--faint); font-size:16px; padding:0 2px}
+
+  .loop-foot{
+    display:flex; gap:18px; flex-wrap:wrap; margin-top:16px; padding-top:14px;
+    border-top:1px solid var(--hair);
+  }
+  .gate{font-size:12px; color:var(--muted)}
+  .gate b{color:var(--ink); font-weight:600}
+  .gate.pass b{color:var(--green)}
+  .gate.fail b{color:var(--red)}
+  .gate.cap b{color:var(--amber)}
+
+  /* side rail showing supabase write/subscribe */
+  .bus{
+    display:flex; align-items:center; gap:10px; margin:14px 0 0;
+    font-size:12px; color:var(--green); font-weight:500;
+  }
+  .bus .pill{
+    background:rgba(47,138,78,.1); border:1px solid rgba(47,138,78,.3);
+    color:var(--green); border-radius:20px; padding:4px 11px; font-size:11px;
+  }
+
+  .note{font-size:12px; color:var(--muted); margin:6px 0 0}
+  .note code{font-family:ui-monospace,Menlo,monospace; font-size:11px; background:var(--sink); padding:1px 5px; border-radius:4px; color:var(--ink)}
+
+  .twocol{display:grid; grid-template-columns:1fr 1fr; gap:20px}
+  @media(max-width:860px){.twocol{grid-template-columns:1fr}}
+
+  .keyrow{display:flex; gap:10px; align-items:flex-start; margin:0 0 9px; font-size:12.5px}
+  .keyrow .kdot{width:9px; height:9px; border-radius:2px; margin-top:5px; flex:none}
+  .keyrow b{font-weight:600}
+  .keyrow span{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="micro">AutoCut · End-to-End Architecture</div>
+  <h1>Request flow &amp; where the dynamic workflow lives</h1>
+  <p class="sub">One generation, top to bottom. The browser kicks a job, the Agent SDK lands it inside Daytona, and a <b>deterministic JS dynamic-workflow controller</b> runs the self-correction loop — writing events to Supabase the whole way so the UI animates live.</p>
+
+  <div class="legend">
+    <span class="chip"><span class="dot" style="background:var(--ink)"></span>Browser / Next.js</span>
+    <span class="chip"><span class="dot" style="background:var(--coral)"></span>Daytona + dynamic workflow</span>
+    <span class="chip"><span class="dot" style="background:var(--green)"></span>Supabase (data bus)</span>
+    <span class="chip"><span class="dot" style="background:var(--blue)"></span>Model judgment (agent)</span>
+    <span class="chip"><span class="dot" style="background:var(--ink)"></span>Deterministic JS (no agent)</span>
+  </div>
+
+  <!-- LAYER 1: BROWSER -->
+  <div class="layer">
+    <div class="layer-head">
+      <span class="layer-tag tag-browser">Browser</span>
+      <h2>Next.js · Vercel AI SDK · shadcn</h2>
+    </div>
+    <div class="row">
+      <div class="box">
+        <h3>Setup screen</h3>
+        <p>Footage library + brief form (style · aspect · length · tone). Coral <b>Generate</b>.</p>
+      </div>
+      <div class="box">
+        <h3>Fires the job</h3>
+        <p class="api">POST /api/generate</p>
+        <p>Sends project_id + brief.</p>
+      </div>
+      <div class="box">
+        <h3>Generation theater (live)</h3>
+        <p>Agent steps · rubric scorecard · before/after player — all driven by Realtime rows.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <span class="arrow down"><span class="glyph">↓</span><span class="code">POST /api/generate</span> launch job</span>
+    <span class="arrow up"><span class="glyph">↑</span> Supabase Realtime — steps + grades stream back</span>
+  </div>
+
+  <!-- LAYER 2: API + AGENT SDK -->
+  <div class="layer">
+    <div class="layer-head">
+      <span class="layer-tag tag-browser">Server</span>
+      <h2>Next.js API route → Claude Agent SDK (headless)</h2>
+    </div>
+    <div class="row">
+      <div class="box">
+        <h3>/api/generate route</h3>
+        <p>Validates brief, creates a <code>run_id</code>, hands off to the Agent SDK. Returns immediately — work is async.</p>
+      </div>
+      <div class="box">
+        <h3>Agent SDK bridge</h3>
+        <p>Launches / monitors a <b>headless Claude Code (Opus 4.8)</b> run inside the Daytona workspace. Pre-warmed for the demo.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <span class="arrow down"><span class="glyph">↓</span> headless launch into the agent's home</span>
+  </div>
+
+  <!-- LAYER 3: DAYTONA -->
+  <div class="layer" style="border-color:var(--coral); border-width:1.5px">
+    <div class="layer-head">
+      <span class="layer-tag tag-daytona">Daytona workspace</span>
+      <h2>The agent's home — Opus 4.8 + the filesystem</h2>
+    </div>
+    <p class="note" style="margin-bottom:14px">Persistent sandbox: same filesystem holds <code>clips.json</code>, ffmpeg, Remotion, and file-memory. This is where the long-horizon loop actually runs.</p>
+
+    <!-- THE LOOP -->
+    <div class="loop">
+      <span class="loop-badge">loop/ — dynamic workflow controller (deterministic JS)</span>
+      <p class="loop-sub" style="margin-top:10px">A JS <code>while</code> loop owns termination — <b>not</b> the agent free-running on <code>/goal</code>. Caps: <b>iters ≤ 4</b> · token budget · wallclock. Tracks <b>best_render</b> in a plain variable.</p>
+
+      <div class="steps">
+        <div class="step agent">
+          <div class="k">Agent</div>
+          <div class="v">Builder</div>
+          <div class="d">reads clips.json → emits JSON EDL (schema-validated)</div>
+        </div>
+        <span class="seq">→</span>
+        <div class="step det">
+          <div class="k">JS</div>
+          <div class="v">edit/ renderer</div>
+          <div class="d">EDL → ffmpeg cut (+ LUT)</div>
+        </div>
+        <span class="seq">→</span>
+        <div class="step det">
+          <div class="k">JS</div>
+          <div class="v">overlay/</div>
+          <div class="d">Remotion → <b>fallback</b> ffmpeg drawtext</div>
+        </div>
+        <span class="seq">→</span>
+        <div class="step verify">
+          <div class="k">Agent · fresh ctx</div>
+          <div class="v">Director verifier</div>
+          <div class="d">sees video + rubric ONLY → grade JSON</div>
+        </div>
+      </div>
+
+      <div class="loop-foot">
+        <span class="gate pass">↳ <b>pass</b> (every dim ≥ 7) → ship best_render + write 1 memory rule</span>
+        <span class="gate fail">↳ <b>fail</b> → feedback loops back to Builder (counts as an iteration)</span>
+        <span class="gate cap">↳ <b>cap hit</b> → ship best-so-far · "passed N/5, iter K" · never stall</span>
+      </div>
+
+      <div class="bus">
+        <span>After every step the controller</span>
+        <span class="pill">writes events / grades rows →</span>
+        <span>Supabase</span>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <div class="box">
+        <h3>memory/ — outer loop (files)</h3>
+        <p>distill + consult. One verified rule persists across sessions on the Daytona disk.</p>
+      </div>
+      <div class="box">
+        <h3>preprocess/ — off demo path</h3>
+        <p>transcribe · frame_understand · embed. Run offline as a <b>pipeline() fan-out</b> to bake <code>clips.json</code>.</p>
+      </div>
+      <div class="box">
+        <h3>grading panel — deferred</h3>
+        <p>N director lenses as a <b>parallel() fan-out</b> on one render. Code-homed for post-demo.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <span class="arrow down"><span class="glyph">↓</span> read/write data + artifacts</span>
+    <span class="arrow" style="color:var(--blue)"><span class="glyph" style="color:var(--blue)">↔</span> verifier &amp; builder are agent() calls</span>
+  </div>
+
+  <!-- LAYER 4: SUPABASE + MODELS -->
+  <div class="twocol">
+    <div class="layer" style="margin-bottom:0; border-color:var(--green)">
+      <div class="layer-head">
+        <span class="layer-tag tag-supa">Supabase</span>
+        <h2>The data bus</h2>
+      </div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Postgres</b> — projects, edls, renders, grades</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Realtime</b> — controller writes → UI subscribes → scorecard climbs live</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Storage</b> — raw clips + rendered video</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>pgvector / Auth</b> — off demo path · single pre-authed user</span></div>
+      <p class="note">This is the seam between Daytona and the browser: the loop never talks to the UI directly — it just writes rows, the UI just reads them. Reconnection-safe &amp; replayable.</p>
+    </div>
+
+    <div class="layer" style="margin-bottom:0; border-color:var(--blue)">
+      <div class="layer-head">
+        <span class="layer-tag tag-models">Replicate</span>
+        <h2>Hosted models — offline only</h2>
+      </div>
+      <div class="keyrow"><span class="kdot" style="background:var(--blue)"></span><span>transcription (word-timestamped)</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--blue)"></span><span>frame → text VLM (scene understanding)</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--blue)"></span><span>content embeddings → pgvector</span></div>
+      <p class="note">Only touched by <code>preprocess/</code> ahead of the demo to produce <code>clips.json</code>. Never on the live path.</p>
+    </div>
+  </div>
+
+  <!-- READING KEY -->
+  <div class="layer" style="margin-top:20px">
+    <div class="micro" style="margin-bottom:12px">How to read the three pieces you asked about</div>
+    <div class="twocol">
+      <div>
+        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Dynamic workflow</b> = the <code>loop/</code> controller. Deterministic JS that wraps model-driven steps. Owns caps, best-so-far, and the build→render→verify→feedback cycle. The same primitive (fan-out) also powers preprocess + the grading panel.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Daytona</b> = where that controller + Opus 4.8 + ffmpeg + Remotion + file-memory all live on one filesystem. The agent's persistent home.</span></div>
+      </div>
+      <div>
+        <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Supabase</b> = the decoupling bus. Controller writes events/grades; the browser subscribes via Realtime. Neither side blocks the other — that's what makes the live scorecard reconnection-safe.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--ink)"></span><span><b>The split that matters:</b> blue steps = <code>agent()</code> (judgment); ink steps = plain JS (render, validate, caps). Termination is trustworthy <i>because</i> the loop logic is code, not a vibe.</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
