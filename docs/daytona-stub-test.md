@@ -30,13 +30,17 @@ reads `process.env`, not `.env` — just sees them), clones the branch, `npm ins
 the SDK de-risk check, then starts `npm run agent` and streams its logs to your terminal.
 
 ```bash
-# add DAYTONA_API_KEY to .env (the other secrets are already there), then:
-npm run provision:daytona
+# add DAYTONA_API_KEY to .env (the other secrets are already there). This repo is
+# private, so the sandbox needs a GitHub token to clone — pass one inline:
+GITHUB_TOKEN="$(gh auth token)" npm run provision:daytona
 ```
 
 Reads from `.env`: `DAYTONA_API_KEY`, `ANTHROPIC_API_KEY`, `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`. Optional overrides: `GITHUB_TOKEN` (private clone),
-`REPO_BRANCH`, `DAYTONA_SNAPSHOT`, `DAYTONA_SANDBOX_NAME`, `AGENT_TOOLS`.
+`SUPABASE_SERVICE_ROLE_KEY`. **`GITHUB_TOKEN` is required** while the repo is private
+(`gh auth token` reuses your existing `gh` login; or use a PAT with `repo` scope) — the
+token is used only for the clone and scrubbed from the sandbox's git remote afterward.
+Optional overrides: `REPO_BRANCH`, `DAYTONA_SNAPSHOT`, `DAYTONA_SANDBOX_NAME`, `AGENT_TOOLS`.
+Re-running tears down any existing sandbox of the same name first, so it won't pile up.
 Ctrl-C detaches the log stream; the sandbox keeps running and auto-stops after 60 min idle.
 Skip straight to **Pass criteria** once you see `runs subscription: SUBSCRIBED`.
 

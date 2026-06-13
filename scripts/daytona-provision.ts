@@ -60,11 +60,37 @@ const daytona = new Daytona();
 
 async function main() {
   console.log(`▶ volume: get/create ${VOLUME_NAME}`);
-  const volume = await daytona.volume.get(VOLUME_NAME, true);
+  let volume = await daytona.volume.get(VOLUME_NAME, true);
+
+  // A freshly created volume is pending_create/creating; the sandbox create
+  // rejects until it's ready. Poll until ready (or surface a terminal state).
+  const deadline = Date.now() + 120_000;
+  while (volume.state !== "ready") {
+    if (volume.state === "error" || volume.state === "deleted") {
+      throw new Error(`volume ${VOLUME_NAME} entered terminal state: ${volume.state}`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`volume ${VOLUME_NAME} not ready after 120s (state: ${volume.state})`);
+    }
+    console.log(`  waiting for volume… (${volume.state})`);
+    await new Promise((r) => setTimeout(r, 3000));
+    volume = await daytona.volume.get(VOLUME_NAME);
+  }
+  console.log(`  volume ready: ${volume.id}`);
+
+  // Idempotency: tear down a prior sandbox of the same name so re-runs don't pile up.
+  try {
+    const existing = await daytona.get(SANDBOX_NAME);
+    console.log(`▶ sandbox: deleting existing "${SANDBOX_NAME}" (${existing.id})`);
+    await existing.delete();
+  } catch {
+    /* none with that name — fine */
+  }
 
   console.log(`▶ sandbox: creating "${SANDBOX_NAME}" (env baked in)`);
   const sandbox = await daytona.create(
     {
+      name: SANDBOX_NAME,
       ...(process.env.DAYTONA_SNAPSHOT
         ? { snapshot: process.env.DAYTONA_SNAPSHOT }
         : { language: "typescript" }),
@@ -101,9 +127,12 @@ async function main() {
     return res;
   };
 
+  // Clone with the token in the URL, then scrub it from the remote so it isn't
+  // left in the sandbox's git config.
   await run(
     "git clone",
-    `rm -rf ${REPO_DIR} && git clone -b ${REPO_BRANCH} ${REPO_URL} ${REPO_DIR}`,
+    `rm -rf ${REPO_DIR} && git clone -b ${REPO_BRANCH} ${REPO_URL} ${REPO_DIR} && ` +
+      `git -C ${REPO_DIR} remote set-url origin https://${REPO_HOST}`,
   );
   await run("npm install", `cd ${REPO_DIR} && npm install`, 900);
   await run("ensure memory dir", `mkdir -p ${MEMORY_MOUNT}`);
