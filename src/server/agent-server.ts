@@ -163,11 +163,13 @@ export async function executeRun(
       if (url) deliveredRef = url;
     }
 
-    if (result.passed) {
+    // Best-so-far IS a ship (PRD: "never ship nothing"). Status reflects whether
+    // a render was delivered; the scorecard conveys pass vs N/5. Only a run that
+    // produced no render at all is "failed" (the UI then has nothing to show).
+    if (deliveredRef) {
       await updateRunStatus(client, run.id, "shipped", deliveredRef);
     } else {
-      // Capped/failed: still ship the best-so-far ref so the UI isn't empty.
-      await updateRunStatus(client, run.id, "failed", deliveredRef);
+      await updateRunStatus(client, run.id, "failed");
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

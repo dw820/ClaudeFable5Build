@@ -44,11 +44,18 @@ const STYLES: Record<string, StyleSpec> = {
 
 /** Escape a string for use inside a single drawtext `text='...'` value. */
 export function escapeDrawtext(text: string): string {
-  // Order matters: backslash first, then the chars ffmpeg's parser treats
-  // specially inside a filtergraph option value.
+  // ffmpeg has TWO escaping levels and quotes don't fully protect the graph
+  // level — a stray "," or "[" splits the filtergraph (the real bug: a caption
+  // like "3, 2, 1" made ffmpeg report `No such filter: '2'`). Structural chars
+  // (\ , ; [ ] = and newlines) can't be reliably escaped inside text='...', so
+  // neutralize them to spaces — harmless for short captions. Then handle the
+  // option-level chars: ' becomes a curly apostrophe (no escaping needed), and
+  // : / % stay literal via backslash.
   return text
-    .replace(/\\/g, "\\\\")
-    .replace(/'/g, "\\'")
+    .replace(/[\r\n\\,;[\]=]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/'/g, "’")
     .replace(/:/g, "\\:")
     .replace(/%/g, "\\%");
 }

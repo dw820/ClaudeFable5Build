@@ -70,7 +70,16 @@ describe("ffmpegCaptions drawtext", () => {
   });
 
   it("escapes special chars for the filtergraph parser", () => {
-    expect(escapeDrawtext("50% it's 3:30")).toBe("50\\% it\\'s 3\\:30");
+    // ' → curly apostrophe (safe inside text='...'); : and % stay literal via \.
+    expect(escapeDrawtext("50% it's 3:30")).toBe("50\\% it’s 3\\:30");
+  });
+
+  it("neutralizes filtergraph-structural chars that quotes don't protect", () => {
+    // The real bug: a comma split the filtergraph → `No such filter: '2'`.
+    expect(escapeDrawtext("3, 2, 1")).toBe("3 2 1");
+    expect(escapeDrawtext("wait [for] it; go")).toBe("wait for it go");
+    // Structural chars must not survive into the output at all.
+    expect(escapeDrawtext("a,b;c[d]e=f")).not.toMatch(/[,;[\]=]/);
   });
 
   it("chains one drawtext per caption for the sample EDL", () => {
