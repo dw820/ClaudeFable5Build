@@ -3,10 +3,13 @@
  * and derive a one-line caption + a small set of content tags per clip.
  *
  * Two injectable seams keep this unit-testable with no ffmpeg and no network:
- *   - `FrameSampler` — given a clip path, returns frame refs (data URIs / URLs).
- *     Production uses `ffmpegFrameSampler` (an injected `exec`); tests pass a
- *     fake that returns canned refs.
+ *   - frame access via an injected `exec` (`sampleFrameAt`) or a `FrameSampler`;
+ *     tests pass fakes that return canned bytes/refs.
  *   - `ReplicateRunner` — the VLM call.
+ *
+ * Production now captions PER SCENE: `cli.ts` calls `understandScenes` (one
+ * midpoint frame per scene window from `scenes.ts`). `understandFrames` /
+ * `ffmpegFrameSampler` remain for the single-frame path and the unit tests.
  *
  * `parseVlmResponse` is PURE (VLM output → { caption, tags }) and separately
  * tested. The VLM is prompted to emit JSON; we also tolerate loose prose so a

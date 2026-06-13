@@ -107,7 +107,7 @@ describe("createAutocutTools", () => {
         resolution: [1080, 1920], transcript: [], caption: "a vlog", tags: ["vlog"],
         scenes: [
           { t0: 0, t1: 9.5, caption: "unboxing on a desk", tags: ["product"] },
-          { t0: 24, t1: 31, caption: "walking outside", tags: ["outdoor"] },
+          { t0: 9.5, t1: 30, caption: "walking outside", tags: ["outdoor"] },
         ],
       }],
     });

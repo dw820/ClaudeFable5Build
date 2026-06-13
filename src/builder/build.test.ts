@@ -107,14 +107,14 @@ describe("buildPrompt (pure)", () => {
         resolution: [1080, 1920], transcript: [], caption: "a vlog", tags: ["vlog"],
         scenes: [
           { t0: 0, t1: 9.5, caption: "unboxing on a desk", tags: ["product"] },
-          { t0: 24, t1: 31, caption: "walking outside", tags: ["outdoor"] },
+          { t0: 9.5, t1: 30, caption: "walking outside", tags: ["outdoor"] },
         ],
       }],
     });
     const prompt = buildPrompt(ctx({ library: lib }));
     expect(prompt.user).toContain("scenes:");
     expect(prompt.user).toContain('0.0–9.5s: "unboxing on a desk"');
-    expect(prompt.user).toContain('24.0–31.0s: "walking outside"');
+    expect(prompt.user).toContain('9.5–30.0s: "walking outside"');
   });
 });
 
