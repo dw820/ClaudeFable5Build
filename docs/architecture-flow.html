@@ -143,7 +143,7 @@
 
   <div class="micro">AutoCut · End-to-End Architecture</div>
   <h1>Request flow &amp; where the dynamic workflow lives</h1>
-  <p class="sub">One generation, top to bottom. The browser kicks a job, the Agent SDK lands it inside Daytona, and an autonomous <b>Claude Agent SDK session</b> runs the self-correction loop; deterministic caps fence it — writing events to Supabase the whole way so the UI animates live.</p>
+  <p class="sub">One generation, top to bottom. The browser doesn't talk to the agent — it <b>enqueues a run row</b> in Supabase. A long-running worker on Daytona (<code>agent-server.ts</code>) is subscribed via Realtime, <b>claims</b> the run, and runs an autonomous <b>Claude Agent SDK session</b> (<code>agent/session.ts</code>) for the self-correction loop; deterministic caps fence it — emitting events back to Supabase the whole way so the UI animates live.</p>
 
   <div class="legend">
     <span class="chip"><span class="dot" style="background:var(--ink)"></span>Browser / Next.js</span>
@@ -165,42 +165,42 @@
         <p>Footage library + brief form (style · aspect · length · tone). Coral <b>Generate</b>.</p>
       </div>
       <div class="box">
-        <h3>Fires the job</h3>
+        <h3>Enqueues the job</h3>
         <p class="api">POST /api/generate</p>
-        <p>Sends project_id + brief.</p>
+        <p>Sends brief · style · aspect · length. Inserts one <code>runs</code> row (status=queued), returns <code>runId</code> — never launches the agent.</p>
       </div>
       <div class="box">
         <h3>Generation theater (live)</h3>
-        <p>Agent steps · rubric scorecard · before/after player — all driven by Realtime rows.</p>
+        <p><code>/run/[id]</code> subscribes to <code>events</code> + the <code>runs</code> row via Realtime: agent steps · rubric scorecard · before/after player. Plays <code>runs.shipped_render</code> when set.</p>
       </div>
     </div>
   </div>
 
   <div class="flow">
-    <span class="arrow down"><span class="glyph">↓</span><span class="code">POST /api/generate</span> launch job</span>
-    <span class="arrow up"><span class="glyph">↑</span> Supabase Realtime — steps + grades stream back</span>
+    <span class="arrow down"><span class="glyph">↓</span><span class="code">INSERT runs (queued)</span> enqueue only</span>
+    <span class="arrow up"><span class="glyph">↑</span> Supabase Realtime — steps + grades + shipped_render stream back</span>
   </div>
 
-  <!-- LAYER 2: API + AGENT SDK -->
+  <!-- LAYER 2: API ROUTE (ENQUEUE) -->
   <div class="layer">
     <div class="layer-head">
       <span class="layer-tag tag-browser">Server</span>
-      <h2>Next.js API route → Claude Agent SDK (headless)</h2>
+      <h2>Next.js API route — enqueue only (no agent launch)</h2>
     </div>
     <div class="row">
       <div class="box">
         <h3>/api/generate route</h3>
-        <p>Validates brief, creates a <code>run_id</code>, hands off to the Agent SDK. Returns immediately — work is async.</p>
+        <p>Validates the brief, inserts a <code>runs</code> row with <code>status=queued</code>, returns <code>runId</code>. That's the whole job — the UI then talks to the agent <b>only through Supabase</b>.</p>
       </div>
       <div class="box">
-        <h3>Agent SDK bridge</h3>
-        <p>Launches / monitors a <b>headless Claude Code (Opus 4.8)</b> run inside the Daytona workspace. Pre-warmed for the demo.</p>
+        <h3>The decoupling</h3>
+        <p>No headless launch from the request. The queued row sits in Postgres until the Daytona worker — already running and subscribed — claims it. Reconnection-safe &amp; replayable.</p>
       </div>
     </div>
   </div>
 
   <div class="flow">
-    <span class="arrow down"><span class="glyph">↓</span> headless launch into the agent's home</span>
+    <span class="arrow down" style="color:var(--green)"><span class="glyph" style="color:var(--green)">↓</span> Realtime <code>runs</code> INSERT → the worker wakes &amp; claims</span>
   </div>
 
   <!-- LAYER 3: DAYTONA -->
@@ -209,48 +209,56 @@
       <span class="layer-tag tag-daytona">Daytona workspace</span>
       <h2>The agent's home — Opus 4.8 + the filesystem</h2>
     </div>
-    <p class="note" style="margin-bottom:14px">Persistent sandbox: same filesystem holds <code>clips.json</code>, ffmpeg, Remotion, and file-memory. This is where the long-horizon loop actually runs.</p>
+    <p class="note" style="margin-bottom:14px">Persistent sandbox: same filesystem holds <code>clips.json</code>, ffmpeg, file-memory, and the media files in <code>MEDIA_DIR</code>. This is where the long-horizon loop actually runs.</p>
+
+    <!-- THE WORKER -->
+    <div class="row" style="margin-bottom:16px">
+      <div class="box" style="flex:1 1 100%; border-color:var(--coral)">
+        <h3>server/agent-server.ts — the worker / host</h3>
+        <p>Long-running process (<code>npm run agent</code>). On boot reclaims orphaned <code>queued</code> runs, subscribes to <code>runs</code> INSERT, and <b>atomically claims</b> each one (win/lose). On a win it: <code>consult()</code> memory → runs the Agent SDK session below → uploads the shipped render to Storage <code>renders</code> → sets <code>runs.shipped_render</code> → <code>distill()</code> one rule on pass. Tools toggle via <code>AGENT_TOOLS</code> (<b>stub</b> = scripted money-shot · <b>real</b> = Claude + ffmpeg).</p>
+      </div>
+    </div>
 
     <!-- THE LOOP -->
     <div class="loop">
-      <span class="loop-badge">agent/ — autonomous Agent SDK session (Claude drives; caps fence)</span>
-      <p class="loop-sub" style="margin-top:10px">Claude owns iteration; the <b>harness</b> owns termination via maxTurns + maxBudgetUsd + wall-clock <code>close()</code> — never a free-running <code>/goal</code> with no cap. Caps: <b>iters ≤ 4</b> · token budget · wallclock. Tracks <b>best_render</b> in a plain variable.</p>
+      <span class="loop-badge">agent/session.ts — autonomous Agent SDK session (Claude drives; caps fence)</span>
+      <p class="loop-sub" style="margin-top:10px">Claude owns iteration and calls the four MCP tools below in a loop; the <b>session</b> owns termination via maxTurns + maxBudgetUsd + wall-clock — never a free-running <code>/goal</code> with no cap. Caps: <b>iters ≤ 4</b> · token budget · wallclock. <code>tracker.ts</code> rolls turns into a <b>best_render</b> + LoopResult. <span style="color:var(--faint)">(The legacy deterministic <code>loop/runLoop</code> is test-only — this session replaced it as the loop owner.)</span></p>
 
       <div class="steps">
         <div class="step agent">
-          <div class="k">Agent</div>
-          <div class="v">Builder</div>
-          <div class="d">reads clips.json → emits JSON EDL (schema-validated)</div>
+          <div class="k">tool</div>
+          <div class="v">search_clips</div>
+          <div class="d">reads clips.json → returns candidates + scene summaries</div>
+        </div>
+        <span class="seq">→</span>
+        <div class="step agent">
+          <div class="k">tool · model</div>
+          <div class="v">build_edl</div>
+          <div class="d">Claude → JSON EDL (schema-validated, bounced if invalid)</div>
         </div>
         <span class="seq">→</span>
         <div class="step det">
-          <div class="k">JS</div>
-          <div class="v">edit/ renderer</div>
-          <div class="d">EDL → ffmpeg cut (+ LUT)</div>
-        </div>
-        <span class="seq">→</span>
-        <div class="step det">
-          <div class="k">JS</div>
-          <div class="v">overlay/</div>
-          <div class="d">Remotion → <b>fallback</b> ffmpeg drawtext</div>
+          <div class="k">tool · JS</div>
+          <div class="v">render</div>
+          <div class="d">ffmpeg cut (+LUT) → <b>ffmpeg drawtext captions</b> <span style="color:var(--faint)">(Remotion deferred)</span></div>
         </div>
         <span class="seq">→</span>
         <div class="step verify">
-          <div class="k">Agent · fresh ctx</div>
-          <div class="v">Director verifier</div>
-          <div class="d">sees video + rubric ONLY → grade JSON</div>
+          <div class="k">tool · model · fresh ctx</div>
+          <div class="v">grade</div>
+          <div class="d">keyframes + rubric ONLY → Claude vision → grade JSON</div>
         </div>
       </div>
 
       <div class="loop-foot">
-        <span class="gate pass">↳ <b>pass</b> (every dim ≥ 7) → ship best_render + write 1 memory rule</span>
-        <span class="gate fail">↳ <b>fail</b> → feedback loops back to Builder (counts as an iteration)</span>
+        <span class="gate pass">↳ <b>pass</b> (every dim ≥ 7) → worker uploads render → <code>shipped_render</code> + distills 1 memory rule</span>
+        <span class="gate fail">↳ <b>fail</b> → feedback loops back to build_edl (counts as an iteration)</span>
         <span class="gate cap">↳ <b>cap hit</b> → ship best-so-far · "passed N/5, iter K" · never stall</span>
       </div>
 
       <div class="bus">
-        <span>the harness watches the SDK stream and</span>
-        <span class="pill">writes events / grades rows →</span>
+        <span>the worker maps SDK turns to LoopEvents and</span>
+        <span class="pill">writes events rows (fire-and-forget) →</span>
         <span>Supabase</span>
       </div>
     </div>
@@ -258,22 +266,22 @@
     <div class="row" style="margin-top:16px">
       <div class="box">
         <h3>memory/ — outer loop (files)</h3>
-        <p>distill + consult. One verified rule persists across sessions on the Daytona disk.</p>
+        <p><code>consult()</code> on run start, <code>distill()</code> one rule on pass. Persists across sessions on the Daytona disk (<code>MEMORY_DIR</code>).</p>
       </div>
       <div class="box">
         <h3>preprocess/ — off demo path</h3>
         <p>transcribe · frame_understand · embed. Run offline as a <b>pipeline() fan-out</b> to bake <code>clips.json</code>.</p>
       </div>
       <div class="box">
-        <h3>grading panel — deferred</h3>
-        <p>N director lenses as a <b>parallel() fan-out</b> on one render. Code-homed for post-demo.</p>
+        <h3>overlay/remotion · grading panel — deferred</h3>
+        <p>Remotion template (real-mode forces the ffmpeg-caption path) and N-lens <b>parallel() fan-out</b> grading. Code-homed for post-demo.</p>
       </div>
     </div>
   </div>
 
   <div class="flow">
-    <span class="arrow down"><span class="glyph">↓</span> read/write data + artifacts</span>
-    <span class="arrow" style="color:var(--blue)"><span class="glyph" style="color:var(--blue)">↔</span> verifier &amp; builder are agent() calls</span>
+    <span class="arrow down"><span class="glyph">↓</span> worker writes rows + uploads render</span>
+    <span class="arrow" style="color:var(--blue)"><span class="glyph" style="color:var(--blue)">↔</span> build_edl &amp; grade are model-backed tools</span>
   </div>
 
   <!-- LAYER 4: SUPABASE + MODELS -->
@@ -283,11 +291,11 @@
         <span class="layer-tag tag-supa">Supabase</span>
         <h2>The data bus</h2>
       </div>
-      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Postgres</b> — projects, edls, renders, grades</span></div>
-      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Realtime</b> — harness stream-watch writes → UI subscribes → scorecard climbs live</span></div>
-      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Storage</b> — raw clips + rendered video</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Postgres</b> — <code>runs</code> (brief · status · shipped_render) + <code>events</code> (iteration · phase · message · score_snapshot)</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Realtime</b> — worker writes runs/events → UI subscribes → scorecard climbs live</span></div>
+      <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Storage</b> — <code>source-clips</code> (private) + <code>renders</code> (public, played in-browser)</span></div>
       <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>pgvector / Auth</b> — off demo path · single pre-authed user</span></div>
-      <p class="note">This is the seam between Daytona and the browser: the loop never talks to the UI directly — it just writes rows, the UI just reads them. Reconnection-safe &amp; replayable.</p>
+      <p class="note">This is the seam between Daytona and the browser, in <b>both</b> directions: the UI enqueues a <code>runs</code> row, the worker claims it via Realtime, then writes <code>events</code> back. Neither side calls the other directly. Reconnection-safe &amp; replayable.</p>
     </div>
 
     <div class="layer" style="margin-bottom:0; border-color:var(--blue)">
@@ -307,11 +315,11 @@
     <div class="micro" style="margin-bottom:12px">How to read the three pieces you asked about</div>
     <div class="twocol">
       <div>
-        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Autonomous session</b> = <code>agent/</code>. Claude owns the build→render→grade→fix cycle; the harness owns caps + best-so-far. The same primitive (fan-out) also powers preprocess + the grading panel.</span></div>
-        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Daytona</b> = where that controller + Opus 4.8 + ffmpeg + Remotion + file-memory all live on one filesystem. The agent's persistent home.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Autonomous session</b> = <code>agent/session.ts</code>. Claude owns the search→build→render→grade→fix cycle via MCP tools; the session owns caps + best-so-far. <code>agent-server.ts</code> is the worker that hosts it.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--coral)"></span><span><b>Daytona</b> = where the worker + Opus 4.8 + ffmpeg + file-memory + media all live on one filesystem. The agent's persistent home; the worker runs as <code>npm run agent</code>.</span></div>
       </div>
       <div>
-        <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Supabase</b> = the decoupling bus. Controller writes events/grades; the browser subscribes via Realtime. Neither side blocks the other — that's what makes the live scorecard reconnection-safe.</span></div>
+        <div class="keyrow"><span class="kdot" style="background:var(--green)"></span><span><b>Supabase</b> = the decoupling bus, both ways. UI enqueues a <code>runs</code> row → worker claims via Realtime → worker writes <code>events</code> back. Neither side blocks the other — that's what makes the live scorecard reconnection-safe.</span></div>
         <div class="keyrow"><span class="kdot" style="background:var(--ink)"></span><span><b>The split that matters:</b> blue steps = <code>agent()</code> (judgment); ink steps = plain JS (render, validate, caps). Termination is trustworthy <i>because</i> the caps are code (maxTurns/maxBudgetUsd/wall-clock), even though the agent drives.</span></div>
       </div>
     </div>
