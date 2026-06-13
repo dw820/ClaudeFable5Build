@@ -63,7 +63,7 @@ function describeClip(clip: Clip): string {
     `tags=[${clip.tags.join(", ")}]`,
     `caption="${clip.caption}"`,
     `transcript="${transcriptSnippet(clip)}"`,
-  ].join(" ") + describeScenes(clip);
+  ].join(" | ") + describeScenes(clip);
 }
 
 /** The rubric dimensions block, keyed by the canonical RUBRIC_DIMENSIONS. */
