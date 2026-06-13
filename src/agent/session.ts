@@ -26,7 +26,7 @@ export interface AgentCaps {
   maxBudgetUsd: number;
   wallclockMs: number;
 }
-export const DEFAULT_CAPS: AgentCaps = { maxTurns: 12, maxBudgetUsd: 1.0, wallclockMs: 180_000 };
+export const DEFAULT_CAPS: AgentCaps = { maxTurns: 16, maxBudgetUsd: 1.5, wallclockMs: 180_000 };
 
 export interface AgentSessionDeps {
   query: QueryFn;
